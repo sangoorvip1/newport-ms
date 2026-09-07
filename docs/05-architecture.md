@@ -257,7 +257,7 @@ src/state/auth.tsx       جلسة + mustChangePwd (يفرض شاشة تغيير 
 src/state/sync.tsx       حالة المزامنة، آخر cursor، conflicts، أزرار «أعد المحاولة الآن»
 src/screens/*            Login, WorkOrders, NewWorkOrder, Attendance, OrgTree, Sync
 src/ui/Shell.tsx         تنقل RTL، مؤشر مزامنة، تنبيه الجلسة المقيّدة
-src/hooks/query.ts       React Query مع staleTime حسب الكيان (HR دقائق، قراءات ميدانية ثوانٍ)
+src/hooks/query.ts       React Query: قائمة موحّدة (staleTime=20s، retry=1، enabled حسب حالة الشبكة)
 ```
 قواعد UI: لا حقل محرر لقيمة يختمها الخادم (`status`…) — تعرضها للقراءة مع مصدرها؛ وأزرار الاعتماد تظهر
 فقط لو `me.permissions` تحمل رمز الاعتماد، لأن الخادم سيرفض 403 في كل الأحوال.
