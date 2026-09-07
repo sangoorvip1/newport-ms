@@ -1,0 +1,42 @@
+{
+  "name": "@newport/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      },
+      "default": "./dist/esm/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node -e \"require('fs').writeFileSync('dist/cjs/package.json', JSON.stringify({type:'commonjs'},null,2))\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "matrix": "tsx scripts/gen-matrix.ts"
+  },
+  "dependencies": {
+    "zod": "4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "tsx": "4.20.6",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  },
+  "module": "./dist/esm/index.js",
+  "typings": "./dist/cjs/index.d.ts"
+}

@@ -1,0 +1,57 @@
+{
+  "name": "@newport/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Windows desktop client (Electron + React) for Newport maintenance operations — offline-first via Dexie + shared sync core",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run build:renderer && npm run build:electron",
+    "build:renderer": "vite build",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "preview": "vite preview",
+    "start": "electron .",
+    "dist:win": "npm run build && electron-builder --win nsis"
+  },
+  "dependencies": {
+    "@newport/domain": "*",
+    "@tanstack/react-query": "5.102.8",
+    "dexie": "4.4.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@vitejs/plugin-react": "6.1.1",
+    "electron": "44.2.0",
+    "electron-builder": "26.15.3",
+    "typescript": "5.9.2",
+    "vite": "8.2.2"
+  },
+  "build": {
+    "appId": "com.newport.desktop",
+    "productName": "Newport BFC-L1",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "Newport-BFC-L1-${version}-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

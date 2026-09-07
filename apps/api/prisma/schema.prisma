@@ -1,0 +1,2081 @@
+// Newport LP. LTD — نظام إدارة معمل الأسمدة الجنوبية (الخط الأول / البصرة)
+// مصدر الحقيقة للمخطط الفيزيائي: PostgreSQL 16 + Prisma 6.
+// مبادئ التصميم:
+//  1) PK = UUIDv7 (يولّده العميل عند العمل دون اتصال؛ لا اعتماد على sequence).
+//  2) كل جدول قابل للمزامنة يحمل (بأسماء Prisma الفعلية): version / syncSeq / deletedAt (tombstone) /
+//     clientOpId / isOfflineCreated / createdAt / updatedAt. الأعمدة تبقى camelCase في القاعدة، لذا
+//     أي SQL خام يجب أن يقبّس الأسماء: WHERE "deletedAt" IS NULL — لا deleted_at.
+//  3) الأرقام البشرية (WO-2026-000123 …) في عمود number وتُسند من sequence على الخادم.
+//  4) أسماء الجداول snake_case عبر @@map (الطبقة raw SQL الخاصة بالمزامنة/التقارير تعتمد عليها).
+//  5) لا حذف فيزيائي للبيانات التشغيلية/المالية: soft delete + audit_trails (append-only).
+//  6) الطبقة الثانية للأمن: Row-Level Security (انظر migration التوسعات).
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/**
+ * ═══════════════════ 1) المنظمة والوصول ═══════════════════
+ */
+
+model Company {
+  id             String     @id @default(uuid(7)) @db.Uuid
+  nameAr         String     @db.VarChar(160)
+  nameEn         String     @db.VarChar(160)
+  registrationNo String?    @db.VarChar(64)
+  taxNo          String?    @db.VarChar(32)
+  country        String     @default("IQ") @db.VarChar(2)
+  createdAt      DateTime   @default(now())
+  facilities     Facility[]
+
+  @@map("companies")
+}
+
+model Facility {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  companyId   String    @db.Uuid
+  code        String    @unique @db.VarChar(24) // BFC-L1
+  nameAr      String    @db.VarChar(200)
+  nameEn      String    @db.VarChar(200)
+  cityAr      String?   @db.VarChar(80)
+  timezone    String    @default("Asia/Baghdad") @db.VarChar(40)
+  capacityTpd Decimal?  @db.Decimal(12, 2)
+  startDate   DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  company     Company              @relation(fields: [companyId], references: [id])
+  departments Department[]
+  positions   Position[]
+  users       User[]
+  assets      Asset[]
+  shiftLogs   ProductionShiftLog[]
+  workOrders  WorkOrder[]
+  documents   Document[]
+  auditTrails AuditTrail[]
+  changeLog   SyncChangeLog[]
+
+  @@index([companyId, isActive])
+  @@map("facilities")
+}
+
+model Department {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  facilityId     String   @db.Uuid
+  code           String   @db.VarChar(16) // PROD | MAINT | ADMIN
+  nameAr         String   @db.VarChar(120)
+  nameEn         String   @db.VarChar(120)
+  kind           DeptKind @default(TECHNICAL)
+  costCenterCode String?  @db.VarChar(24)
+  headUserId     String?  @db.Uuid
+  sortOrder      Int      @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  facility       Facility        @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  subDepartments SubDepartment[]
+  users          User[]
+
+  @@unique([facilityId, code])
+  @@index([facilityId, isActive])
+  @@map("departments")
+}
+
+enum DeptKind {
+  TECHNICAL
+  ADMIN
+}
+
+model SubDepartment {
+  id             String      @id @default(uuid(7)) @db.Uuid
+  departmentId   String      @db.Uuid
+  code           String      @db.VarChar(24) // PROD-UREA …
+  nameAr         String      @db.VarChar(120)
+  nameEn         String      @db.VarChar(120)
+  kind           SubDeptKind
+  isFieldWork    Boolean     @default(false)
+  costCenterCode String?     @db.VarChar(24)
+  headUserId     String?     @db.Uuid
+  sortOrder      Int         @default(0)
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  department      Department             @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  positions       Position[]
+  users           User[]
+  roleGrants      RoleSubDeptGrant[]
+  workOrders      WorkOrder[]
+  assets          Asset[]
+  labSamples      LabSample[]
+  employees       Employee[]
+  formDeployments MobileFormDeployment[]
+
+  @@unique([departmentId, code])
+  @@index([isActive, kind])
+  @@map("sub_departments")
+}
+
+enum SubDeptKind {
+  UREA
+  AMMONIA
+  COOLING_TOWER
+  LAB
+  HEAT_EQUIPMENT
+  ROTATING_EQUIPMENT
+  ELECTRICAL
+  VALVE
+  INSTRUMENTATION
+  GENERAL_MAINTENANCE
+  BIOMETRIC
+  COMMERCIAL
+  FINANCE
+}
+
+model Position {
+  id               String  @id @default(uuid(7)) @db.Uuid
+  facilityId       String  @db.Uuid
+  subDeptId        String  @db.Uuid
+  parentPositionId String? @db.Uuid
+  code             String  @db.VarChar(32)
+  nameAr           String  @db.VarChar(120)
+  nameEn           String  @db.VarChar(120)
+  isSupervisory    Boolean @default(false)
+  isShiftCritical  Boolean @default(false)
+  isActive         Boolean @default(true)
+
+  facility Facility      @relation(fields: [facilityId], references: [id])
+  subDept  SubDepartment @relation(fields: [subDeptId], references: [id], onDelete: Cascade)
+  parent   Position?     @relation("PositionTree", fields: [parentPositionId], references: [id])
+  children Position[]    @relation("PositionTree")
+  users    User[]
+
+  @@unique([subDeptId, code])
+  @@map("positions")
+}
+
+model User {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  facilityId     String    @db.Uuid
+  username       String    @unique @db.VarChar(64)
+  passwordHash   String    @db.VarChar(120)
+  fullNameAr     String    @db.VarChar(160)
+  fullNameEn     String?   @db.VarChar(160)
+  email          String?   @db.VarChar(160)
+  phone          String?   @db.VarChar(32)
+  employeeId     String?   @unique @db.Uuid
+  positionId     String?   @db.Uuid
+  departmentId   String    @db.Uuid
+  subDeptId      String    @db.Uuid
+  shiftId        String?   @db.Uuid
+  badgeNo        String?   @db.VarChar(32)
+  punchId        String?   @db.VarChar(32)
+  language       String    @default("ar") @db.VarChar(8)
+  theme          String    @default("dark") @db.VarChar(8)
+  jobStatus      JobStatus @default(ACTIVE)
+  isMfaEnabled   Boolean   @default(false)
+  lastLoginAt    DateTime?
+  lastSyncAt     DateTime?
+  syncCursor     BigInt    @default(0)
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+  mustChangePwd  Boolean   @default(false)
+  version        Int       @default(1)
+  syncSeq        BigInt?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  facility           Facility       @relation(fields: [facilityId], references: [id])
+  department         Department     @relation(fields: [departmentId], references: [id])
+  subDept            SubDepartment  @relation(fields: [subDeptId], references: [id])
+  position           Position?      @relation(fields: [positionId], references: [id])
+  employee           Employee?      @relation(fields: [employeeId], references: [id])
+  shift              ShiftPattern?  @relation(fields: [shiftId], references: [id])
+  roles              UserRole[]
+  tokens             RefreshToken[]
+  devices            Device[]
+  approvals          ApprovalStep[] @relation("Approver")
+  delegationsFrom    Delegation[]   @relation("Delegator")
+  delegatesTo        Delegation[]   @relation("Delegate")
+  auditTrails        AuditTrail[]
+  workOrdersCreated  WorkOrder[]    @relation("WOCreatedBy")
+  workOrdersAssigned WorkOrder[]    @relation("WOAssignedTo")
+  notifications      Notification[]
+
+  @@index([subDeptId, jobStatus])
+  @@index([departmentId])
+  @@index([punchId])
+  @@map("users")
+}
+
+enum JobStatus {
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+  CONTRACTOR
+  VISITOR
+}
+
+model Role {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  code          String    @unique @db.VarChar(40)
+  nameAr        String    @db.VarChar(120)
+  nameEn        String    @db.VarChar(120)
+  defaultScope  ScopeKind @default(SUBDEPT)
+  isSystem      Boolean   @default(true)
+  descriptionAr String?   @db.VarChar(500)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  permissions   RolePermission[]
+  users         UserRole[]
+  subDeptGrants RoleSubDeptGrant[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id               String    @id @default(uuid(7)) @db.Uuid
+  code             String    @unique @db.VarChar(64)
+  module           String    @db.VarChar(24)
+  action           String    @db.VarChar(24)
+  nameAr           String    @db.VarChar(200)
+  nameEn           String    @db.VarChar(200)
+  maxScope         ScopeKind @default(SUBDEPT)
+  isOfflineCapable Boolean   @default(false)
+
+  roles RolePermission[]
+
+  @@index([module, action])
+  @@map("permissions")
+}
+
+enum ScopeKind {
+  NONE
+  SELF
+  TEAM
+  SUBDEPT
+  DEPT
+  ALL
+}
+
+model RolePermission {
+  roleId       String @db.Uuid
+  permissionId String @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  userId            String    @db.Uuid
+  roleId            String    @db.Uuid
+  scopeKind         ScopeKind @default(SUBDEPT)
+  scopeDepartmentId String?   @db.Uuid
+  scopeSubDeptId    String?   @db.Uuid
+  grantedById       String?   @db.Uuid
+  grantedAt         DateTime  @default(now())
+  expiresAt         DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId, scopeKind, scopeSubDeptId, scopeDepartmentId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+/// مصفوفة "الشعبة × الدور" — تُزرع من @newport/domain ويمكن ضبطها من الواجهة
+model RoleSubDeptGrant {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  subDeptId String    @db.Uuid
+  roleId    String    @db.Uuid
+  scopeKind ScopeKind @default(SUBDEPT)
+  isDefault Boolean   @default(true)
+  denyJson  Json?
+  extraJson Json?
+
+  subDept SubDepartment @relation(fields: [subDeptId], references: [id], onDelete: Cascade)
+  role    Role          @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([subDeptId, roleId])
+  @@map("role_subdept_grants")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique @db.VarChar(128)
+  familyId  String    @db.Uuid
+  deviceId  String?   @db.VarChar(64)
+  ip        String?   @db.VarChar(45)
+  userAgent String?   @db.VarChar(250)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("refresh_tokens")
+}
+
+model Device {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  externalId     String    @unique @db.VarChar(64)
+  userId         String    @db.Uuid
+  platform       Platform
+  appVersion     String?   @db.VarChar(24)
+  deviceName     String?   @db.VarChar(120)
+  pushToken      String?   @db.VarChar(255)
+  pushProvider   String?   @db.VarChar(16)
+  lastSeenAt     DateTime  @default(now())
+  lastSyncAt     DateTime?
+  lastPullCursor BigInt    @default(0)
+  pendingOps     Int       @default(0)
+  isTrusted      Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, platform])
+  @@map("devices")
+}
+
+enum Platform {
+  WIN
+  ANDROID
+  IOS
+  WEB
+}
+
+model Delegation {
+  id          String         @id @default(uuid(7)) @db.Uuid
+  fromUserId  String         @db.Uuid
+  toUserId    String         @db.Uuid
+  roleId      String         @db.Uuid
+  subDeptId   String?        @db.Uuid
+  permissions Json?
+  startAt     DateTime
+  endAt       DateTime
+  reasonAr    String         @db.VarChar(400)
+  status      ApprovalStatus @default(PENDING)
+
+  fromUser User @relation("Delegator", fields: [fromUserId], references: [id])
+  toUser   User @relation("Delegate", fields: [toUserId], references: [id])
+
+  @@index([fromUserId, startAt, endAt])
+  @@map("delegations")
+}
+
+model Approval {
+  id          String         @id @default(uuid(7)) @db.Uuid
+  entityType  String         @db.VarChar(48)
+  entityId    String         @db.Uuid
+  policyCode  String         @db.VarChar(48)
+  status      ApprovalStatus @default(PENDING)
+  completedAt DateTime?
+
+  steps ApprovalStep[]
+
+  @@unique([entityType, entityId, policyCode])
+  @@index([status])
+  @@map("approvals")
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model ApprovalStep {
+  id               String         @id @default(uuid(7)) @db.Uuid
+  approvalId       String         @db.Uuid
+  orderNo          Int
+  approverUserId   String?        @db.Uuid
+  approverRoleCode String?        @db.VarChar(40)
+  status           ApprovalStatus @default(PENDING)
+  commentAr        String?        @db.VarChar(500)
+  actedAt          DateTime?
+  isDelegated      Boolean        @default(false)
+
+  approval Approval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  approver User?    @relation("Approver", fields: [approverUserId], references: [id])
+
+  @@unique([approvalId, orderNo])
+  @@map("approval_steps")
+}
+
+/**
+ * ═══════════════════ 2) الورديات ═══════════════════
+ */
+
+model ShiftPattern {
+  id                   String  @id @default(uuid(7)) @db.Uuid
+  code                 String  @unique @db.VarChar(8)
+  nameAr               String  @db.VarChar(80)
+  startLocal           String  @db.VarChar(5)
+  endLocal             String  @db.VarChar(5)
+  isOvernight          Boolean @default(false)
+  graceMinutes         Int     @default(15)
+  lateThresholdMinutes Int     @default(30)
+  otMinMinutes         Int     @default(60)
+  nightDiffPct         Decimal @default(0) @db.Decimal(5, 2)
+  isActive             Boolean @default(true)
+
+  users       User[]
+  assignments ShiftAssignment[]
+
+  @@map("shift_patterns")
+}
+
+model ShiftAssignment {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  employeeId String   @db.Uuid
+  shiftId    String   @db.Uuid
+  workDate   DateTime @db.Date
+  unitCode   String?  @db.VarChar(24)
+  noteAr     String?  @db.VarChar(200)
+
+  shift    ShiftPattern @relation(fields: [shiftId], references: [id])
+  employee Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, workDate])
+  @@index([workDate, shiftId])
+  @@map("shift_assignments")
+}
+
+/**
+ * ═══════════════════ 3) الأصول ═══════════════════
+ */
+
+model ProductionUnit {
+  id        String  @id @default(uuid(7)) @db.Uuid
+  code      String  @unique @db.VarChar(24) // AMMONIA | UREA | COOLING_TOWER | UTILITY | LAB
+  nameAr    String  @db.VarChar(120)
+  subDeptId String? @db.Uuid
+
+  assets    Asset[]
+  shiftLogs ProductionShiftLog[]
+
+  @@map("production_units")
+}
+
+model Asset {
+  id             String      @id @default(uuid(7)) @db.Uuid
+  facilityId     String      @db.Uuid
+  parentId       String?     @db.Uuid
+  unitId         String?     @db.Uuid
+  tag            String      @unique @db.VarChar(64)
+  nameAr         String      @db.VarChar(200)
+  nameEn         String?     @db.VarChar(200)
+  classCode      String      @db.VarChar(16)
+  subDeptId      String?     @db.Uuid
+  locationPath   String?     @db.VarChar(200)
+  qrCode         String?     @db.VarChar(64)
+  manufacturer   String?     @db.VarChar(120)
+  modelNo        String?     @db.VarChar(120)
+  serialNo       String?     @db.VarChar(64)
+  criticality    Criticality @default(NORMAL)
+  status         AssetStatus @default(OPERATIONAL)
+  installDate    DateTime?
+  designData     Json?
+  costCenterCode String?     @db.VarChar(24)
+  version        Int         @default(1)
+  syncSeq        BigInt?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  deletedAt      DateTime?
+
+  facility    Facility            @relation(fields: [facilityId], references: [id])
+  parent      Asset?              @relation("AssetTree", fields: [parentId], references: [id])
+  children    Asset[]             @relation("AssetTree")
+  unit        ProductionUnit?     @relation(fields: [unitId], references: [id])
+  subDept     SubDepartment?      @relation(fields: [subDeptId], references: [id])
+  pmPlans     PmPlan[]
+  workOrders  WorkOrder[]
+  readings    AssetReading[]
+  psvTests    PsvTestRecord[]
+  inspections AssetInspection[]
+  downtime    EquipmentDowntime[]
+  calibration CalibrationRecord[]
+
+  @@index([subDeptId, status])
+  @@index([classCode])
+  @@map("assets")
+}
+
+enum Criticality {
+  CRITICAL
+  HIGH
+  NORMAL
+  LOW
+}
+
+enum AssetStatus {
+  OPERATIONAL
+  STANDBY
+  UNDER_MAINTENANCE
+  DEFECTIVE
+  ISOLATED
+  DECOMMISSIONED
+}
+
+/// سجل اختبار صمامات السلامة — شعبة الصمامات (Bench test / PSV register)
+model PsvTestRecord {
+  id               String    @id @default(uuid(7)) @db.Uuid
+  assetId          String    @db.Uuid
+  testDate         DateTime
+  benchNo          String?   @db.VarChar(32)
+  setPressureBar   Decimal   @db.Decimal(8, 3)
+  popPressureBar   Decimal?  @db.Decimal(8, 3)
+  reseatedBar      Decimal?  @db.Decimal(8, 3)
+  result           String    @db.VarChar(24) // PASS | FAIL | REPAIRED
+  nextTestDue      DateTime?
+  technicianUserId String?   @db.Uuid
+  workOrderId      String?   @db.Uuid
+  remarksAr        String?   @db.VarChar(500)
+
+  asset Asset @relation(fields: [assetId], references: [id])
+
+  @@index([assetId, testDate])
+  @@map("psv_test_records")
+}
+
+model AssetInspection {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  assetId         String   @db.Uuid
+  type            String   @db.VarChar(32) // NDT | THICKNESS | VISUAL | THERMOGRAPHY
+  inspectedAt     DateTime
+  resultJson      Json
+  findingsAr      String?  @db.VarChar(1000)
+  inspectorUserId String   @db.Uuid
+
+  asset Asset @relation(fields: [assetId], references: [id])
+
+  @@index([assetId, inspectedAt])
+  @@map("asset_inspections")
+}
+
+model CalibrationRecord {
+  id               String    @id @default(uuid(7)) @db.Uuid
+  assetId          String    @db.Uuid
+  loopTag          String?   @db.VarChar(48)
+  calibratedAt     DateTime
+  dueAt            DateTime?
+  asFound          Json?
+  asLeft           Json?
+  isPass           Boolean   @default(true)
+  technicianUserId String    @db.Uuid
+
+  asset Asset @relation(fields: [assetId], references: [id])
+
+  @@index([assetId, dueAt])
+  @@map("calibration_records")
+}
+
+/**
+ * ═══════════════════ 4) الإنتاج ═══════════════════
+ */
+
+model ProductionShiftLog {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  facilityId        String    @db.Uuid
+  unitId            String    @db.Uuid
+  shiftDate         DateTime  @db.Date
+  shiftCode         String    @db.VarChar(8)
+  preparedById      String    @db.Uuid
+  status            LogStatus @default(DRAFT)
+  productionTons    Decimal?  @db.Decimal(12, 3)
+  designRateTph     Decimal?  @db.Decimal(10, 3)
+  availabilityPct   Decimal?  @db.Decimal(5, 2)
+  downtimeHours     Decimal?  @db.Decimal(7, 2)
+  lopiCount         Int       @default(0)
+  gasSupplyIssueMin Decimal?  @db.Decimal(8, 2)
+  eventsJson        Json?
+  notes             String?   @db.Text
+  approvedById      String?   @db.Uuid
+  approvedAt        DateTime?
+  isOfflineCreated  Boolean   @default(false)
+  version           Int       @default(1)
+  syncSeq           BigInt?
+  clientOpId        String?   @db.VarChar(64)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  facility   Facility           @relation(fields: [facilityId], references: [id])
+  unit       ProductionUnit     @relation(fields: [unitId], references: [id])
+  parameters ProcessParameter[]
+  labSamples LabSample[]
+  workOrders WorkOrder[]
+
+  @@unique([unitId, shiftDate, shiftCode])
+  @@index([facilityId, shiftDate])
+  @@map("production_shift_logs")
+}
+
+enum LogStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  LOCKED
+}
+
+model ProcessParameter {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  logId     String?  @db.Uuid
+  assetId   String?  @db.Uuid
+  paramCode String   @db.VarChar(40)
+  value     Decimal  @db.Decimal(14, 4)
+  unit      String?  @db.VarChar(16)
+  at        DateTime
+  isAlarm   Boolean  @default(false)
+  source    String   @default("MANUAL") @db.VarChar(16)
+
+  log ProductionShiftLog? @relation(fields: [logId], references: [id], onDelete: SetNull)
+
+  @@index([paramCode, at])
+  @@index([assetId, at])
+  @@map("process_parameters")
+}
+
+model ProductionAlarm {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  assetId     String?   @db.Uuid
+  tag         String    @db.VarChar(64)
+  message     String    @db.VarChar(400)
+  severity    String    @db.VarChar(16)
+  triggeredAt DateTime
+  ackAt       DateTime?
+  ackById     String?   @db.Uuid
+  actionAr    String?   @db.VarChar(600)
+  workOrderId String?   @db.Uuid
+  version     Int       @default(1)
+  syncSeq     BigInt?
+
+  @@index([triggeredAt, severity])
+  @@map("production_alarms")
+}
+
+model EquipmentDowntime {
+  id           String       @id @default(uuid(7)) @db.Uuid
+  assetId      String?      @db.Uuid
+  unitCode     String       @db.VarChar(24)
+  startAt      DateTime
+  endAt        DateTime?
+  hours        Decimal?     @db.Decimal(8, 2)
+  kind         DowntimeKind
+  causeCode    String?      @db.VarChar(32)
+  causeNotes   String?      @db.Text
+  lostTons     Decimal?     @db.Decimal(10, 3)
+  workOrderId  String?      @db.Uuid
+  loggedById   String       @db.Uuid
+  verifiedById String?      @db.Uuid
+  verifiedAt   DateTime?
+  version      Int          @default(1)
+  syncSeq      BigInt?
+
+  asset Asset? @relation(fields: [assetId], references: [id])
+
+  @@index([unitCode, startAt])
+  @@index([assetId, startAt])
+  @@map("equipment_downtimes")
+}
+
+enum DowntimeKind {
+  PLANNED_SHUTDOWN
+  PLANNED_MAINTENANCE
+  UNPLANNED_MAINTENANCE
+  OPERATIONAL
+  UTILITY_GAS
+  ELECTRICAL_TRIP
+  ENVIRONMENTAL
+  EXTERNAL
+}
+
+/**
+ * ═══════════════════ 5) المختبر ═══════════════════
+ */
+
+model LabParameter {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  code      String   @unique @db.VarChar(32)
+  nameAr    String   @db.VarChar(160)
+  unit      String?  @db.VarChar(16)
+  method    String?  @db.VarChar(80)
+  specMin   Decimal? @db.Decimal(14, 5)
+  specMax   Decimal? @db.Decimal(14, 5)
+  appliesTo String   @db.VarChar(32)
+
+  results LabResult[]
+  specs   LabSpec[]
+
+  @@map("lab_parameters")
+}
+
+model LabSpec {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  parameterId   String   @db.Uuid
+  productCode   String   @db.VarChar(32)
+  grade         String   @default("TECHNICAL") @db.VarChar(32)
+  minVal        Decimal? @db.Decimal(14, 5)
+  maxVal        Decimal? @db.Decimal(14, 5)
+  effectiveFrom DateTime @db.Date
+
+  parameter LabParameter @relation(fields: [parameterId], references: [id])
+
+  @@unique([parameterId, productCode, grade, effectiveFrom])
+  @@map("lab_specs")
+}
+
+model LabSample {
+  id            String       @id @default(uuid(7)) @db.Uuid
+  sampleNumber  String       @unique @db.VarChar(32)
+  subDeptId     String       @db.Uuid
+  unitCode      String       @db.VarChar(24)
+  sampleType    String       @db.VarChar(40)
+  pointTag      String?      @db.VarChar(48)
+  collectedById String       @db.Uuid
+  collectedAt   DateTime
+  status        SampleStatus @default(COLLECTED)
+  logId         String?      @db.Uuid
+  isFastTracked Boolean      @default(false)
+  integrityJson Json?
+  workOrderId   String?      @db.Uuid
+  version       Int          @default(1)
+  syncSeq       BigInt?
+  createdAt     DateTime     @default(now())
+  deletedAt     DateTime?
+
+  subDept SubDepartment       @relation(fields: [subDeptId], references: [id])
+  log     ProductionShiftLog? @relation(fields: [logId], references: [id])
+  results LabResult[]
+
+  @@index([subDeptId, status, collectedAt])
+  @@map("lab_samples")
+}
+
+enum SampleStatus {
+  COLLECTED
+  IN_QUEUE
+  ANALYZING
+  RESULTED
+  VERIFIED
+  REJECTED
+  VOIDED
+}
+
+model LabResult {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  sampleId     String    @db.Uuid
+  parameterId  String    @db.Uuid
+  value        Decimal   @db.Decimal(14, 5)
+  unit         String?   @db.VarChar(16)
+  isOutOfSpec  Boolean   @default(false)
+  method       String?   @db.VarChar(80)
+  remarks      String?   @db.VarChar(600)
+  enteredById  String    @db.Uuid
+  enteredAt    DateTime  @default(now())
+  verifiedById String?   @db.Uuid
+  verifiedAt   DateTime?
+  version      Int       @default(1)
+  syncSeq      BigInt?
+
+  sample    LabSample    @relation(fields: [sampleId], references: [id], onDelete: Cascade)
+  parameter LabParameter @relation(fields: [parameterId], references: [id])
+
+  @@unique([sampleId, parameterId])
+  @@index([isOutOfSpec])
+  @@map("lab_results")
+}
+
+model LabOosCase {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  code        String    @unique @db.VarChar(32)
+  sampleId    String    @db.Uuid
+  resultId    String?   @db.Uuid
+  severity    String    @db.VarChar(16)
+  rootCauseAr String?   @db.Text
+  capaAr      String?   @db.Text
+  status      String    @default("OPEN") @db.VarChar(24)
+  openedById  String    @db.Uuid
+  closedAt    DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([status, severity])
+  @@map("lab_oos_cases")
+}
+
+/**
+ * ═══════════════════ 6) الصيانة ═══════════════════
+ */
+
+model WorkOrder {
+  id               String     @id @default(uuid(7)) @db.Uuid
+  number           String?    @unique @db.VarChar(32)
+  facilityId       String     @db.Uuid
+  assetId          String?    @db.Uuid
+  subDeptId        String?    @db.Uuid
+  departmentId     String     @db.Uuid
+  title            String     @db.VarChar(200)
+  description      String     @db.Text
+  status           WoStatus   @default(DRAFT)
+  priority         WoPriority @default(MEDIUM)
+  sourceType       WoSource   @default(MANAGEMENT)
+  sourceRef        String?    @db.VarChar(64)
+  logId            String?    @db.Uuid
+  permitId         String?    @db.Uuid
+  createdById      String     @db.Uuid
+  assignedToId     String?    @db.Uuid
+  approverId       String?    @db.Uuid
+  isSafetyCritical Boolean    @default(false)
+  requirePermit    Boolean    @default(false)
+  planStartAt      DateTime?
+  planEndAt        DateTime?
+  targetEndAt      DateTime?
+  actualStartAt    DateTime?
+  actualEndAt      DateTime?
+  estHours         Decimal?   @db.Decimal(8, 2)
+  laborHours       Decimal?   @db.Decimal(8, 2)
+  partsCost        Decimal?   @db.Decimal(16, 2)
+  laborCost        Decimal?   @db.Decimal(16, 2)
+  contractorCost   Decimal?   @db.Decimal(16, 2)
+  currency         String     @default("IQD") @db.VarChar(3)
+  costCenterCode   String?    @db.VarChar(24)
+  rootCause        String?    @db.VarChar(32)
+  closeNotes       String?    @db.Text
+  reworkCount      Int        @default(0)
+  isOfflineCreated Boolean    @default(false)
+  clientOpId       String?    @db.VarChar(64)
+  version          Int        @default(1)
+  syncSeq          BigInt?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  deletedAt        DateTime?
+
+  facility     Facility            @relation(fields: [facilityId], references: [id])
+  asset        Asset?              @relation(fields: [assetId], references: [id])
+  subDept      SubDepartment?      @relation(fields: [subDeptId], references: [id])
+  createdBy    User                @relation("WOCreatedBy", fields: [createdById], references: [id])
+  assignedTo   User?               @relation("WOAssignedTo", fields: [assignedToId], references: [id])
+  log          ProductionShiftLog? @relation(fields: [logId], references: [id])
+  requisitions PartRequisition[]   @relation("WoRequisitions")
+  labor        WoLaborEntry[]
+  logs         WoLog[]
+  readings     AssetReading[]
+
+  @@index([subDeptId, status, priority])
+  @@index([assetId, status])
+  @@index([status, targetEndAt])
+  @@index([createdById])
+  @@index([permitId])
+  @@index([syncSeq])
+  @@map("work_orders")
+}
+
+enum WoStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  ASSIGNED
+  IN_PROGRESS
+  ON_HOLD
+  AWAITING_PARTS
+  AWAITING_PERMIT
+  COMPLETED
+  CLOSED
+  CANCELLED
+  REJECTED
+}
+
+enum WoPriority {
+  EMERGENCY
+  URGENT
+  HIGH
+  MEDIUM
+  LOW
+  ROUTINE_PM
+}
+
+enum WoSource {
+  SHIFT_LOG
+  LAB
+  INSPECTION
+  PM
+  BREAKDOWN
+  MANAGEMENT
+}
+
+model WoLog {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  woId          String   @db.Uuid
+  at            DateTime @default(now())
+  byUserId      String   @db.Uuid
+  fromStatus    String?  @db.VarChar(24)
+  toStatus      String?  @db.VarChar(24)
+  textAr        String   @db.VarChar(1200)
+  isFromOffline Boolean  @default(false)
+  photos        Json?
+
+  wo WorkOrder @relation(fields: [woId], references: [id], onDelete: Cascade)
+
+  @@index([woId, at])
+  @@map("wo_logs")
+}
+
+model WoLaborEntry {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  woId       String   @db.Uuid
+  employeeId String   @db.Uuid
+  workDate   DateTime @db.Date
+  shiftCode  String?  @db.VarChar(8)
+  hours      Decimal  @db.Decimal(6, 2)
+  isOvertime Boolean  @default(false)
+  rate       Decimal? @db.Decimal(12, 2)
+
+  wo WorkOrder @relation(fields: [woId], references: [id], onDelete: Cascade)
+
+  @@index([woId])
+  @@index([employeeId, workDate])
+  @@map("wo_labor_entries")
+}
+
+model PartRequisition {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  number         String?   @unique @db.VarChar(32)
+  woId           String?   @db.Uuid
+  costCenterCode String?   @db.VarChar(24)
+  purpose        String?   @db.VarChar(400)
+  status         String    @default("SUBMITTED") @db.VarChar(24)
+  requestedById  String    @db.Uuid
+  approvedById   String?   @db.Uuid
+  approvedAt     DateTime?
+  version        Int       @default(1)
+  syncSeq        BigInt?
+  createdAt      DateTime  @default(now())
+
+  wo    WorkOrder?            @relation("WoRequisitions", fields: [woId], references: [id])
+  lines PartRequisitionLine[]
+
+  @@index([status, createdAt])
+  @@map("part_requisitions")
+}
+
+model PartRequisitionLine {
+  id             String  @id @default(uuid(7)) @db.Uuid
+  requisitionId  String  @db.Uuid
+  itemId         String  @db.Uuid
+  qtyRequested   Decimal @db.Decimal(12, 3)
+  qtyIssued      Decimal @default(0) @db.Decimal(12, 3)
+  uom            String  @db.VarChar(12)
+  isSubstituted  Boolean @default(false)
+  substituteNote String? @db.VarChar(300)
+
+  requisition PartRequisition @relation(fields: [requisitionId], references: [id], onDelete: Cascade)
+  item        StockItem       @relation(fields: [itemId], references: [id])
+
+  @@index([requisitionId])
+  @@map("part_requisition_lines")
+}
+
+model PmPlan {
+  id              String      @id @default(uuid(7)) @db.Uuid
+  code            String      @unique @db.VarChar(32)
+  assetId         String      @db.Uuid
+  titleAr         String      @db.VarChar(200)
+  instructionAr   String?     @db.Text
+  strategy        PmStrategy  @default(TIME_BASED)
+  intervalValue   Int
+  intervalUom     IntervalUom @default(DAY)
+  meterTag        String?     @db.VarChar(48)
+  estHours        Decimal?    @db.Decimal(6, 2)
+  requiredTrades  Json?
+  billOfMaterials Json?
+  safetyNotesAr   String?     @db.Text
+  nextDueAt       DateTime?
+  lastDoneAt      DateTime?
+  isSapSynced     Boolean     @default(false)
+  sapPlanId       String?     @db.VarChar(32)
+  isActive        Boolean     @default(true)
+
+  asset     Asset            @relation(fields: [assetId], references: [id])
+  instances PmPlanInstance[]
+
+  @@index([nextDueAt, isActive])
+  @@map("pm_plans")
+}
+
+enum PmStrategy {
+  TIME_BASED
+  METER_BASED
+  CONDITION_BASED
+  FAILURE_FINDER
+}
+
+enum IntervalUom {
+  DAY
+  WEEK
+  MONTH
+  RUN_HOUR
+  START
+}
+
+model PmPlanInstance {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  planId      String   @db.Uuid
+  dueAt       DateTime
+  status      String   @default("DUE") @db.VarChar(16)
+  workOrderId String?  @db.Uuid
+  // أعمدة المزامنة: الجدول يُدفع إلى الأجهزة (server_wins) فيحتاج version/syncSeq ليعمل القفل التفاؤلي
+  version     Int      @default(1)
+  syncSeq     BigInt?
+
+  plan PmPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, dueAt])
+  @@index([status, dueAt])
+  @@map("pm_plan_instances")
+}
+
+model AssetReading {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  assetId    String   @db.Uuid
+  woId       String?  @db.Uuid
+  kind       String   @db.VarChar(24)
+  measuredAt DateTime
+  byUserId   String   @db.Uuid
+  location   String?  @db.VarChar(48)
+  valuesJson Json
+  unit       String   @db.VarChar(16)
+  isAlarm    Boolean  @default(false)
+  photos     Json?
+  gps        Json?
+  version    Int      @default(1)
+  syncSeq    BigInt?
+
+  asset Asset      @relation(fields: [assetId], references: [id])
+  wo    WorkOrder? @relation(fields: [woId], references: [id])
+
+  @@index([assetId, kind, measuredAt])
+  @@map("asset_readings")
+}
+
+model PermitToWork {
+  id              String       @id @default(uuid(7)) @db.Uuid
+  permitNumber    String       @unique @db.VarChar(32)
+  workOrderId     String?      @db.Uuid
+  type            PermitType
+  areaDescription String       @db.VarChar(600)
+  validFrom       DateTime
+  validTo         DateTime
+  status          PermitStatus @default(REQUESTED)
+  requestedById   String       @db.Uuid
+  areaApproverId  String?      @db.Uuid
+  hseApproverId   String?      @db.Uuid
+  isolationJson   Json?
+  gasTestsJson    Json?
+  precautionsJson Json?
+  crewJson        Json
+  closedAt        DateTime?
+  closureNotes    String?      @db.VarChar(800)
+  version         Int          @default(1)
+  syncSeq         BigInt?
+
+  @@index([workOrderId])
+  @@index([status, validTo])
+  @@index([type, validFrom])
+  @@map("permits_to_work")
+}
+
+enum PermitType {
+  HOT_WORK
+  COLD_WORK
+  CONFINED_SPACE
+  WORKING_AT_HEIGHT
+  EXCAVATION
+  ELECTRICAL_ISO
+  NDE
+  LIFTING
+}
+
+enum PermitStatus {
+  REQUESTED
+  AWAITING_ISOLATION
+  APPROVED_BY_AREA
+  APPROVED_BY_HSE
+  OPEN
+  EXTENDED
+  CLOSED
+  CANCELLED
+}
+
+model SafetyIncident {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  code              String   @unique @db.VarChar(32)
+  occurredAt        DateTime
+  severity          String   @db.VarChar(24)
+  category          String   @db.VarChar(32)
+  descriptionAr     String   @db.Text
+  immediateActionAr String?  @db.Text
+  rootCauseAr       String?  @db.Text
+  correctiveActions Json?
+  areaAssetId       String?  @db.Uuid
+  reportedById      String   @db.Uuid
+  status            String   @default("OPEN") @db.VarChar(24)
+  workOrderId       String?  @db.Uuid
+  createdAt         DateTime @default(now())
+
+  @@index([occurredAt, severity])
+  @@map("safety_incidents")
+}
+
+/**
+ * ═══════════════════ 7) المخازن ═══════════════════
+ */
+
+model Warehouse {
+  id             String  @id @default(uuid(7)) @db.Uuid
+  code           String  @unique @db.VarChar(24)
+  nameAr         String  @db.VarChar(160)
+  whType         String  @db.VarChar(24) // MAIN | FIELD | CONTRACTOR | SCRAP | HAZMAT
+  locationAr     String? @db.VarChar(200)
+  keeperUserId   String? @db.Uuid
+  accessSubDepts Json? // قائمة الشعب المسموح لها بالصرف من هذا المخزن
+  isActive       Boolean @default(true)
+
+  bins     Bin[]
+  balances StockBalance[]
+
+  @@map("warehouses")
+}
+
+model Bin {
+  id          String  @id @default(uuid(7)) @db.Uuid
+  warehouseId String  @db.Uuid
+  code        String  @db.VarChar(32)
+  label       String? @db.VarChar(80)
+  isBulk      Boolean @default(false)
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, code])
+  @@map("bins")
+}
+
+model StockItem {
+  id                  String   @id @default(uuid(7)) @db.Uuid
+  partNumber          String   @unique @db.VarChar(64)
+  nameAr              String   @db.VarChar(240)
+  nameEn              String?  @db.VarChar(240)
+  uom                 String   @db.VarChar(12)
+  materialGrade       String?  @db.VarChar(64)
+  category            String   @db.VarChar(48)
+  isCriticalSpare     Boolean  @default(false)
+  isCustodyControlled Boolean  @default(false)
+  shelfLifeDays       Int?
+  stdUnitCost         Decimal? @db.Decimal(16, 2)
+  currency            String   @default("IQD") @db.VarChar(3)
+  sapMaterialNo       String?  @db.VarChar(24)
+  specs               Json?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+
+  balances StockBalance[]
+  reqLines PartRequisitionLine[]
+  grnLines GrnLine[]
+  miLines  MaterialIssueLine[]
+
+  @@index([category, isCriticalSpare])
+  @@map("stock_items")
+}
+
+model StockBalance {
+  itemId       String    @db.Uuid
+  warehouseId  String    @db.Uuid
+  onHandQty    Decimal   @default(0) @db.Decimal(14, 3)
+  reservedQty  Decimal   @default(0) @db.Decimal(14, 3)
+  minLevel     Decimal?  @db.Decimal(14, 3)
+  maxLevel     Decimal?  @db.Decimal(14, 3)
+  reorderPoint Decimal?  @db.Decimal(14, 3)
+  valuation    Decimal?  @db.Decimal(16, 2)
+  lastCountAt  DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  item      StockItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, warehouseId])
+  @@index([warehouseId])
+  @@map("stock_balances")
+}
+
+model StockMovement {
+  id          String       @id @default(uuid(7)) @db.Uuid
+  itemId      String       @db.Uuid
+  warehouseId String       @db.Uuid
+  binId       String?      @db.Uuid
+  kind        MovementKind
+  qty         Decimal      @db.Decimal(14, 3)
+  unitCost    Decimal?     @db.Decimal(16, 4)
+  currency    String?      @db.VarChar(3)
+  refType     String?      @db.VarChar(32)
+  refId       String?      @db.Uuid
+  docNo       String?      @db.VarChar(32)
+  at          DateTime     @default(now())
+  byUserId    String       @db.Uuid
+  noteAr      String?      @db.VarChar(300)
+
+  @@index([itemId, at])
+  @@index([refType, refId])
+  @@map("stock_movements")
+}
+
+enum MovementKind {
+  GRN
+  ISSUE
+  RETURN
+  TRANSFER_IN
+  TRANSFER_OUT
+  SCRAP
+  COUNT_ADJUST
+  RESERVE
+  UNRESERVE
+}
+
+model Grn {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  number          String   @unique @db.VarChar(32)
+  poLineRef       String?  @db.VarChar(48)
+  vendorId        String?  @db.Uuid
+  vendor          Vendor?  @relation(fields: [vendorId], references: [id])
+  warehouseId     String   @db.Uuid
+  receivedAt      DateTime
+  qualitySignById String?  @db.Uuid
+  storeSignById   String?  @db.Uuid
+  status          String   @default("DRAFT") @db.VarChar(24)
+  vehicleNo       String?  @db.VarChar(32)
+  notesAr         String?  @db.VarChar(600)
+
+  lines GrnLine[]
+
+  @@index([receivedAt, status])
+  @@map("grns")
+}
+
+model GrnLine {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  grnId      String   @db.Uuid
+  itemId     String   @db.Uuid
+  qty        Decimal  @db.Decimal(14, 3)
+  uom        String   @db.VarChar(12)
+  unitCost   Decimal? @db.Decimal(16, 4)
+  serialJson Json?
+
+  grn  Grn       @relation(fields: [grnId], references: [id], onDelete: Cascade)
+  item StockItem @relation(fields: [itemId], references: [id])
+
+  @@index([grnId])
+  @@map("grn_lines")
+}
+
+model MaterialIssue {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  number         String   @unique @db.VarChar(32)
+  requisitionId  String?  @db.Uuid
+  workOrderId    String?  @db.Uuid
+  issuedToUserId String   @db.Uuid
+  issuedAt       DateTime
+  status         String   @default("DRAFT") @db.VarChar(24)
+
+  lines MaterialIssueLine[]
+
+  @@index([issuedAt])
+  @@map("material_issues")
+}
+
+model MaterialIssueLine {
+  id           String  @id @default(uuid(7)) @db.Uuid
+  issueId      String  @db.Uuid
+  itemId       String  @db.Uuid
+  qtyRequested Decimal @db.Decimal(14, 3)
+  qtyIssued    Decimal @db.Decimal(14, 3)
+  qtyReturned  Decimal @default(0) @db.Decimal(14, 3)
+  binId        String? @db.Uuid
+
+  issue MaterialIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  item  StockItem     @relation(fields: [itemId], references: [id])
+
+  @@index([issueId])
+  @@map("material_issue_lines")
+}
+
+model StockCount {
+  id               String   @id @default(uuid(7)) @db.Uuid
+  warehouseId      String   @db.Uuid
+  countedAt        DateTime
+  scopeJson        Json?
+  linesJson        Json
+  status           String   @default("OPEN") @db.VarChar(16)
+  postedByUserId   String   @db.Uuid
+  approvedByUserId String?  @db.Uuid
+
+  @@index([warehouseId, countedAt])
+  @@map("stock_counts")
+}
+
+/**
+ * ═══════════════════ 8) الموارد البشرية / البصمة ═══════════════════
+ */
+
+model Employee {
+  id                  String    @id @default(uuid(7)) @db.Uuid
+  employeeNumber      String    @unique @db.VarChar(24)
+  civilId             String?   @db.VarChar(24)
+  nationality         String?   @db.VarChar(48)
+  birthDate           DateTime?
+  gender              String?   @db.VarChar(8)
+  hireDate            DateTime
+  terminationDate     DateTime?
+  jobTitleAr          String?   @db.VarChar(120)
+  jobLevel            String?   @db.VarChar(24)
+  contractType        String?   @db.VarChar(24)
+  subDeptId           String    @db.Uuid
+  punchId             String?   @db.VarChar(32)
+  badgeNo             String?   @db.VarChar(32)
+  isBiometricEnrolled Boolean   @default(false)
+  baseSalary          Decimal?  @db.Decimal(14, 2)
+  currency            String    @default("IQD") @db.VarChar(3)
+  allowancesJson      Json?
+  bankAccount         String?   @db.VarChar(40)
+  emergencyJson       Json?
+
+  user             User?
+  shiftAssignments ShiftAssignment[]
+  leaveRequests    LeaveRequest[]
+  corrections      AttendanceCorrection[]
+  payrollLines     PayrollLine[]
+  punches          AttendancePunch[]
+  dailySummaries   AttendanceDailySummary[]
+  subDept          SubDepartment            @relation(fields: [subDeptId], references: [id])
+
+  @@index([subDeptId])
+  @@map("employees")
+}
+
+model BiometricDevice {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  code            String    @unique @db.VarChar(32)
+  nameAr          String    @db.VarChar(160)
+  model           String?   @db.VarChar(64)
+  ip              String?   @db.VarChar(45)
+  port            Int?
+  locationAr      String?   @db.VarChar(200)
+  pullIntervalSec Int       @default(300)
+  lastPullAt      DateTime?
+  status          String    @default("ONLINE") @db.VarChar(16)
+
+  pushes AttendancePunch[]
+
+  @@map("biometric_devices")
+}
+
+model AttendancePunch {
+  id          String      @id @default(uuid(7)) @db.Uuid
+  deviceId    String?     @db.Uuid
+  employeeId  String      @db.Uuid
+  punchedAt   DateTime
+  punchType   PunchType
+  verifyMode  String?     @db.VarChar(16)
+  rawRecordId String?     @db.VarChar(64)
+  source      PunchSource @default(DEVICE)
+  matchStatus String      @default("OK") @db.VarChar(16)
+  syncSeq     BigInt?
+
+  device   BiometricDevice? @relation(fields: [deviceId], references: [id])
+  employee Employee         @relation(fields: [employeeId], references: [id])
+
+  @@unique([deviceId, rawRecordId])
+  @@index([employeeId, punchedAt])
+  @@map("attendance_punches")
+}
+
+enum PunchType {
+  IN
+  OUT
+  BREAK_OUT
+  BREAK_IN
+}
+
+enum PunchSource {
+  DEVICE
+  MOBILE
+  MANUAL
+  IMPORT
+}
+
+model AttendanceDailySummary {
+  id                 String    @id @default(uuid(7)) @db.Uuid
+  employeeId         String    @db.Uuid
+  workDate           DateTime  @db.Date
+  shiftCode          String?   @db.VarChar(8)
+  firstInAt          DateTime?
+  lastOutAt          DateTime?
+  workedMinutes      Int       @default(0)
+  scheduledMinutes   Int       @default(0)
+  lateMinutes        Int       @default(0)
+  earlyOutMinutes    Int       @default(0)
+  overtimeMinutes    Int       @default(0)
+  nightDiffPct       Decimal   @default(0) @db.Decimal(5, 2)
+  fridayMultiplier   Decimal   @default(1) @db.Decimal(3, 1)
+  status             String    @db.VarChar(24)
+  exceptionsJson     Json?
+  punchCount         Int       @default(0)
+  reconciliationHash String?   @db.VarChar(16)
+  isLocked           Boolean   @default(false)
+  calculatedAt       DateTime  @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, workDate])
+  @@index([workDate, status])
+  @@map("attendance_daily_summaries")
+}
+
+model AttendanceCorrection {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  employeeId        String    @db.Uuid
+  workDate          DateTime  @db.Date
+  type              String    @db.VarChar(24)
+  reasonAr          String    @db.VarChar(600)
+  inTimeOverride    DateTime?
+  outTimeOverride   DateTime?
+  otMinutesApproved Int?
+  status            String    @default("PENDING") @db.VarChar(16)
+  requestedById     String    @db.Uuid
+  decidedById       String?   @db.Uuid
+  decidedAt         DateTime?
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([status, workDate])
+  @@map("attendance_corrections")
+}
+
+model LeaveRequest {
+  id              String      @id @default(uuid(7)) @db.Uuid
+  employeeId      String      @db.Uuid
+  type            LeaveType
+  fromAt          DateTime
+  toAt            DateTime
+  daysCount       Decimal?    @db.Decimal(6, 2)
+  isPartial       Boolean     @default(false)
+  reasonAr        String?     @db.VarChar(600)
+  attachmentDocId String?     @db.Uuid
+  status          LeaveStatus @default(PENDING)
+  approverUserId  String?     @db.Uuid
+  decidedAt       DateTime?
+  version         Int         @default(1)
+  syncSeq         BigInt?
+  createdAt       DateTime    @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, status])
+  @@index([fromAt])
+  @@map("leave_requests")
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  HAJJ
+  MATERNITY
+  UNPAID
+  MISSION
+  EMERGENCY
+  DAY_OFF_SWAP
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model MobileForm {
+  id                 String    @id @default(uuid(7)) @db.Uuid
+  code               String    @db.VarChar(64)
+  version            Int       @default(1)
+  nameAr             String    @db.VarChar(200)
+  jsonSchema         Json
+  uiSchema           Json?
+  targetSubDeptCodes Json?
+  publishStatus      String    @default("DRAFT") @db.VarChar(16)
+  isOfflineAllowed   Boolean   @default(true)
+  requiresGps        Boolean   @default(false)
+  requiresSignature  Boolean   @default(false)
+  publishedAt        DateTime?
+
+  deployments MobileFormDeployment[]
+  records     MobileFormRecord[]
+
+  @@unique([code, version])
+  @@map("mobile_forms")
+}
+
+model MobileFormDeployment {
+  id            String  @id @default(uuid(7)) @db.Uuid
+  formId        String  @db.Uuid
+  subDeptId     String  @db.Uuid
+  isMandatory   Boolean @default(false)
+  frequencyCron String? @db.VarChar(40)
+
+  form    MobileForm    @relation(fields: [formId], references: [id], onDelete: Cascade)
+  subDept SubDepartment @relation(fields: [subDeptId], references: [id], onDelete: Cascade)
+
+  @@unique([formId, subDeptId])
+  @@map("mobile_form_deployments")
+}
+
+model MobileFormRecord {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  formId            String   @db.Uuid
+  formCode          String   @db.VarChar(64)
+  formVersion       Int
+  employeeId        String?  @db.Uuid
+  assetId           String?  @db.Uuid
+  workOrderId       String?  @db.Uuid
+  readings          Json
+  photos            Json?
+  gps               Json?
+  signatureDocId    String?  @db.Uuid
+  offlineCapturedAt DateTime
+  submittedAt       DateTime @default(now())
+  deviceId          String?  @db.VarChar(64)
+  clientOpId        String?  @db.VarChar(64)
+  version           Int      @default(1)
+  syncSeq           BigInt?
+
+  form MobileForm @relation(fields: [formId], references: [id])
+
+  @@index([formCode, submittedAt])
+  @@index([assetId])
+  @@map("mobile_form_records")
+}
+
+/**
+ * ═══════════════════ 9) التجارية ═══════════════════
+ */
+
+model Customer {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  code          String   @unique @db.VarChar(32)
+  nameAr        String   @db.VarChar(200)
+  nameEn        String?  @db.VarChar(200)
+  customerType  String   @db.VarChar(24)
+  taxNo         String?  @db.VarChar(32)
+  addressAr     String?  @db.VarChar(400)
+  contactPerson String?  @db.VarChar(120)
+  phone         String?  @db.VarChar(32)
+  email         String?  @db.VarChar(120)
+  creditLimit   Decimal? @db.Decimal(18, 2)
+  creditUsed    Decimal  @default(0) @db.Decimal(18, 2)
+  currency      String   @default("IQD") @db.VarChar(3)
+  sapCustomerNo String?  @db.VarChar(16)
+  isActive      Boolean  @default(true)
+
+  orders    SalesOrder[]
+  invoices  SalesInvoice[]
+  contracts Contract[]
+
+  @@map("customers")
+}
+
+model Contract {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  number       String   @unique @db.VarChar(48)
+  customerId   String   @db.Uuid
+  startDate    DateTime @db.Date
+  endDate      DateTime @db.Date
+  productCode  String   @db.VarChar(32)
+  quantityTons Decimal  @db.Decimal(14, 3)
+  pricePerTon  Decimal? @db.Decimal(16, 2)
+  currency     String   @default("USD") @db.VarChar(3)
+  termsAr      String?  @db.Text
+  status       String   @default("ACTIVE") @db.VarChar(16)
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId, endDate])
+  @@map("contracts")
+}
+
+model SalesOrder {
+  id               String    @id @default(uuid(7)) @db.Uuid
+  number           String?   @unique @db.VarChar(32)
+  customerId       String    @db.Uuid
+  contractId       String?   @db.Uuid
+  orderDate        DateTime  @db.Date
+  productCode      String    @db.VarChar(32)
+  qtyOrderedTons   Decimal   @db.Decimal(14, 3)
+  qtyDeliveredTons Decimal   @default(0) @db.Decimal(14, 3)
+  pricePerTon      Decimal   @db.Decimal(16, 2)
+  currency         String    @default("IQD") @db.VarChar(3)
+  fxRate           Decimal?  @db.Decimal(12, 4)
+  truckCount       Int       @default(0)
+  gatePassNo       String?   @db.VarChar(48)
+  depotAr          String?   @db.VarChar(120)
+  status           String    @default("OPEN") @db.VarChar(24)
+  createdBy        String    @db.Uuid
+  confirmedBy      String?   @db.Uuid
+  confirmedAt      DateTime?
+  version          Int       @default(1)
+  syncSeq          BigInt?
+  createdAt        DateTime  @default(now())
+
+  customer Customer         @relation(fields: [customerId], references: [id])
+  lines    SalesOrderLine[]
+
+  @@index([orderDate, status])
+  @@index([customerId, status])
+  @@map("sales_orders")
+}
+
+model SalesOrderLine {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  orderId       String    @db.Uuid
+  truckPlate    String?   @db.VarChar(24)
+  driverName    String?   @db.VarChar(120)
+  ticketInNo    String?   @db.VarChar(32)
+  ticketOutNo   String?   @db.VarChar(32)
+  grossWeightKg Decimal?  @db.Decimal(12, 1)
+  tareWeightKg  Decimal?  @db.Decimal(12, 1)
+  netWeightKg   Decimal?  @db.Decimal(12, 1)
+  loadedAt      DateTime?
+  labSampleId   String?   @db.Uuid
+
+  so SalesOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([ticketOutNo])
+  @@map("sales_order_lines")
+}
+
+model SalesInvoice {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  number      String   @unique @db.VarChar(32)
+  orderId     String?  @db.Uuid
+  customerId  String   @db.Uuid
+  invoiceDate DateTime
+  amount      Decimal  @db.Decimal(18, 2)
+  taxAmount   Decimal  @default(0) @db.Decimal(18, 2)
+  currency    String   @default("IQD") @db.VarChar(3)
+  status      String   @default("OPEN") @db.VarChar(16)
+  journalId   String?  @db.Uuid
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([invoiceDate, status])
+  @@map("sales_invoices")
+}
+
+/**
+ * ═══════════════════ 10) المالية ═══════════════════
+ */
+
+model ExchangeRate {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  fromCode      String   @db.VarChar(3)
+  toCode        String   @db.VarChar(3)
+  rate          Decimal  @db.Decimal(14, 6)
+  effectiveDate DateTime @db.Date
+  source        String   @db.VarChar(32)
+
+  @@unique([fromCode, toCode, effectiveDate])
+  @@map("exchange_rates")
+}
+
+model Account {
+  id             String      @id @default(uuid(7)) @db.Uuid
+  code           String      @unique @db.VarChar(24)
+  nameAr         String      @db.VarChar(200)
+  accType        AccountType
+  parentId       String?     @db.Uuid
+  isPosting      Boolean     @default(true)
+  costCenterCode String?     @db.VarChar(24)
+  isActive       Boolean     @default(true)
+
+  parent      Account?      @relation("AccountTree", fields: [parentId], references: [id])
+  children    Account[]     @relation("AccountTree")
+  lines       JournalLine[]
+  budgetLines BudgetLine[]
+
+  @@index([accType])
+  @@map("accounts")
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+model CostCenter {
+  id        String  @id @default(uuid(7)) @db.Uuid
+  code      String  @unique @db.VarChar(24)
+  nameAr    String  @db.VarChar(160)
+  subDeptId String? @db.Uuid
+  kind      String  @db.VarChar(24)
+
+  budgetLines BudgetLine[]
+
+  @@map("cost_centers")
+}
+
+model BudgetLine {
+  id           String  @id @default(uuid(7)) @db.Uuid
+  fiscalYear   Int
+  costCenterId String  @db.Uuid
+  accountId    String  @db.Uuid
+  lineType     String  @db.VarChar(16)
+  monthlyJson  Json
+  totalAmount  Decimal @db.Decimal(18, 2)
+  actualAmount Decimal @default(0) @db.Decimal(18, 2)
+  approvedById String? @db.Uuid
+  status       String  @default("DRAFT") @db.VarChar(16)
+
+  costCenter CostCenter @relation(fields: [costCenterId], references: [id])
+  account    Account    @relation(fields: [accountId], references: [id])
+
+  @@unique([fiscalYear, costCenterId, accountId, lineType])
+  @@map("budget_lines")
+}
+
+model JournalEntry {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  number        String?  @unique @db.VarChar(32)
+  entryDate     DateTime @db.Date
+  periodKey     String   @db.VarChar(7)
+  descriptionAr String   @db.VarChar(500)
+  sourceDocType String?  @db.VarChar(32)
+  sourceDocId   String?  @db.Uuid
+  currency      String   @default("IQD") @db.VarChar(3)
+  fxRate        Decimal? @db.Decimal(14, 6)
+  status        String   @default("POSTED") @db.VarChar(16)
+  preparedById  String   @db.Uuid
+  approvedById  String?  @db.Uuid
+  createdAt     DateTime @default(now())
+
+  lines JournalLine[]
+
+  @@index([entryDate, status])
+  @@index([sourceDocType, sourceDocId])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id           String  @id @default(uuid(7)) @db.Uuid
+  journalId    String  @db.Uuid
+  accountId    String  @db.Uuid
+  costCenterId String? @db.Uuid
+  debit        Decimal @default(0) @db.Decimal(18, 2)
+  credit       Decimal @default(0) @db.Decimal(18, 2)
+  partnerAr    String? @db.VarChar(200)
+  notesAr      String? @db.VarChar(400)
+
+  journal JournalEntry @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  account Account      @relation(fields: [accountId], references: [id])
+
+  @@index([journalId])
+  @@index([accountId])
+  @@map("journal_lines")
+}
+
+model Vendor {
+  id                String  @id @default(uuid(7)) @db.Uuid
+  code              String  @unique @db.VarChar(32)
+  nameAr            String  @db.VarChar(200)
+  vendorType        String  @db.VarChar(24)
+  taxNo             String? @db.VarChar(32)
+  phone             String? @db.VarChar(32)
+  email             String? @db.VarChar(120)
+  isBlacklisted     Boolean @default(false)
+  qualificationJson Json?
+
+  purchaseRequisitions PurchaseRequisition[]
+  purchaseOrders       PurchaseOrder[]
+  grns                 Grn[]
+
+  @@map("vendors")
+}
+
+model PurchaseRequisition {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  number         String    @unique @db.VarChar(32)
+  vendorId       String?   @db.Uuid
+  costCenterCode String    @db.VarChar(24)
+  subDeptCode    String?   @db.VarChar(24)
+  reasonAr       String    @db.VarChar(600)
+  isEmergency    Boolean   @default(false)
+  linesJson      Json
+  status         String    @default("OPEN") @db.VarChar(24)
+  createdBy      String    @db.Uuid
+  approvedBy     String?   @db.Uuid
+  approvedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  vendor Vendor?         @relation(fields: [vendorId], references: [id])
+  pos    PurchaseOrder[]
+
+  @@index([status, createdAt])
+  @@map("purchase_requisitions")
+}
+
+model PurchaseOrder {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  number          String   @unique @db.VarChar(32)
+  vendorId        String   @db.Uuid
+  requisitionId   String?  @db.Uuid
+  orderDate       DateTime @db.Date
+  currency        String   @default("IQD") @db.VarChar(3)
+  totalAmount     Decimal  @db.Decimal(18, 2)
+  status          String   @default("DRAFT") @db.VarChar(24)
+  deliveryTermsAr String?  @db.VarChar(400)
+  linesJson       Json
+  approvalsJson   Json?
+
+  vendor      Vendor               @relation(fields: [vendorId], references: [id])
+  requisition PurchaseRequisition? @relation(fields: [requisitionId], references: [id])
+
+  @@index([status, orderDate])
+  @@map("purchase_orders")
+}
+
+model PayrollRun {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  periodKey    String   @db.VarChar(7)
+  startDate    DateTime @db.Date
+  endDate      DateTime @db.Date
+  scopeKind    String   @default("ALL") @db.VarChar(16)
+  status       String   @default("DRAFT") @db.VarChar(16)
+  grossTotal   Decimal  @default(0) @db.Decimal(18, 2)
+  netTotal     Decimal  @default(0) @db.Decimal(18, 2)
+  preparedById String   @db.Uuid
+  approvedById String?  @db.Uuid
+  journalId    String?  @db.Uuid
+
+  lines PayrollLine[]
+
+  @@unique([periodKey, scopeKind])
+  @@map("payroll_runs")
+}
+
+model PayrollLine {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  runId         String   @db.Uuid
+  employeeId    String   @db.Uuid
+  baseAmount    Decimal  @db.Decimal(16, 2)
+  allowanceJson Json?
+  earningJson   Json?
+  deductionJson Json?
+  netAmount     Decimal  @db.Decimal(16, 2)
+  workedDays    Decimal? @db.Decimal(6, 2)
+  overtimeHours Decimal? @db.Decimal(7, 2)
+  source        String   @default("ATTENDANCE") @db.VarChar(16)
+
+  run      PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  employee Employee   @relation(fields: [employeeId], references: [id])
+
+  @@unique([runId, employeeId])
+  @@map("payroll_lines")
+}
+
+/**
+ * ═══════════════════ 11) الوثائق والإشعارات ═══════════════════
+ */
+
+model Document {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  facilityId     String?   @db.Uuid
+  code           String?   @db.VarChar(48)
+  titleAr        String    @db.VarChar(240)
+  docType        String    @db.VarChar(32)
+  categoryCode   String?   @db.VarChar(32)
+  objectKey      String    @db.VarChar(400)
+  originalName   String    @db.VarChar(240)
+  mimeType       String    @db.VarChar(80)
+  sizeBytes      BigInt    @default(0)
+  sha256         String?   @db.VarChar(64)
+  revision       String?   @db.VarChar(12)
+  status         String    @default("DRAFT") @db.VarChar(16)
+  ownerSubDeptId String?   @db.Uuid
+  entityType     String?   @db.VarChar(48)
+  entityId       String?   @db.Uuid
+  uploadedById   String    @db.Uuid
+  uploadedAt     DateTime  @default(now())
+  isEncrypted    Boolean   @default(false)
+  version        Int       @default(1)
+  syncSeq        BigInt?
+  createdAt      DateTime  @default(now())
+  deletedAt      DateTime?
+
+  facility Facility? @relation(fields: [facilityId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([docType, status])
+  @@index([sha256])
+  @@map("documents")
+}
+
+model Notification {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  userId     String    @db.Uuid
+  type       String    @db.VarChar(40)
+  level      String    @default("INFO") @db.VarChar(12)
+  titleAr    String    @db.VarChar(200)
+  bodyAr     String    @db.VarChar(600)
+  payload    Json?
+  entityType String?   @db.VarChar(48)
+  entityId   String?   @db.Uuid
+  sentVia    String?   @db.VarChar(40)
+  isRead     Boolean   @default(false)
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+/**
+ * ═══════════════════ 12) التدقيق والمزامنة ═══════════════════
+ */
+
+model AuditTrail {
+  id         BigInt   @id @default(autoincrement())
+  facilityId String?  @db.Uuid
+  at         DateTime @default(now())
+  actorId    String?  @db.Uuid
+  actorName  String?  @db.VarChar(160)
+  action     String   @db.VarChar(32)
+  entityType String   @db.VarChar(48)
+  entityId   String?  @db.Uuid
+  changes    Json?
+  meta       Json?
+  ip         String?  @db.VarChar(45)
+  userAgent  String?  @db.VarChar(250)
+
+  actor    User?     @relation(fields: [actorId], references: [id])
+  facility Facility? @relation(fields: [facilityId], references: [id])
+
+  @@index([entityType, entityId, at])
+  @@index([actorId, at])
+  @@index([action, at])
+  @@map("audit_trails")
+}
+
+/// Change Feed لكل العملاء — العمود الفقري للمزامنة (يملؤه Trigger على الخادم)
+model SyncChangeLog {
+  seq        BigInt   @id @default(autoincrement())
+  facilityId String?  @db.Uuid
+  entity     String   @db.VarChar(48)
+  recordId   String   @db.Uuid
+  op         SyncOp
+  version    Int
+  payload    Json
+  // nullable عمدًا: التغيير قد يأتي من seed/DBA/مهام مجدولة بلا مستخدم بشري
+  actorId    String?  @db.Uuid
+  deviceId   String?  @db.VarChar(64)
+  subDeptId  String?  @db.Uuid
+  at         DateTime @default(now())
+
+  facility Facility? @relation(fields: [facilityId], references: [id])
+
+  @@index([entity, seq])
+  @@index([facilityId, seq])
+  @@index([at])
+  @@map("sync_change_log")
+}
+
+enum SyncOp {
+  UPSERT
+  DELETE
+}
+
+model SyncIdempotency {
+  opId       String   @id @db.VarChar(64)
+  deviceId   String   @db.VarChar(64)
+  entity     String   @db.VarChar(48)
+  recordId   String   @db.Uuid
+  resultJson Json
+  appliedAt  DateTime @default(now())
+
+  @@index([deviceId, appliedAt])
+  @@map("sync_idempotency")
+}
+
+model SyncConflict {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  entity     String    @db.VarChar(48)
+  recordId   String    @db.Uuid
+  deviceId   String    @db.VarChar(64)
+  userId     String    @db.Uuid
+  strategy   String    @db.VarChar(16)
+  clientJson Json?
+  serverJson Json?
+  keptFields Json?
+  resolvedBy String?   @db.Uuid
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([entity, createdAt])
+  @@index([userId, resolvedAt])
+  @@map("sync_conflicts")
+}
+
+model AppSetting {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  key       String    @unique @db.VarChar(80)
+  valueJson Json
+  scopeKind ScopeKind @default(ALL)
+  scopeId   String?   @db.Uuid
+  updatedBy String?   @db.Uuid
+  updatedAt DateTime  @updatedAt
+
+  @@map("app_settings")
+}
+
+model IntegrationConfig {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  systemName    String    @unique @db.VarChar(40) // SAP | ZK_BIOMETRIC | HISTORIAN | SMS | MINIO
+  mode          String    @default("PULL") @db.VarChar(16)
+  endpoint      String?   @db.VarChar(400)
+  credentialRef String?   @db.VarChar(120)
+  scheduleCron  String?   @db.VarChar(40)
+  mapJson       Json?
+  isEnabled     Boolean   @default(false)
+  lastRunAt     DateTime?
+  lastError     String?   @db.VarChar(1000)
+
+  @@map("integration_configs")
+}

@@ -1,0 +1,147 @@
+# Newport BFC-L1 — بيئة التشغيل (خادم المعمل أو سحابة خاصة)
+# الاستخدام:
+#   cp deploy/.env.production.example .env   # ثم عدّل الأسرار
+#   docker compose up -d postgres
+#   npm run db:seed -w @newport/api           # من الحزمة المستضافة (أو: docker compose exec api npx prisma migrate deploy && npm run seed)
+#   docker compose up -d                      # الخادم + البوابة
+#   npm run build -w @newport/desktop && cp -r apps/desktop/dist deploy/web  # لتقديم واجهة المكتب من nginx
+name: newport-bfc-l1
+
+services:
+  postgres:
+    image: postgres:16.6-alpine
+    container_name: newport-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-newport}
+      POSTGRES_USER: ${POSTGRES_USER:-newport}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      TZ: Asia/Baghdad
+      # لتسريع الكتابة مع الالتزام بـ durability: flock + WAL، ولا نخفض synchronous_commit في الإنتاج
+    command:
+      - postgres
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=3GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=512MB
+      - -c
+      - wal_compression=on
+      - -c
+      - max_wal_size=4GB
+      - -c
+      - checkpoint_timeout=15min
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - log_min_duration_statement=500
+      - -c
+      - log_line_prefix=%m [%p] %q%u@%d
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-newport} -d ${POSTGRES_DB:-newport}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [newport]
+    # لا نفذي المنفذ للعامة إلا للتطوير المحلي:
+    ports:
+      - '127.0.0.1:5432:5432'
+
+  api:
+    image: newport/api:0.1.0
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    container_name: newport-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-newport}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-newport}?schema=public&connection_limit=20&pool_timeout=20
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (32+ bytes) in .env}
+      JWT_ACCESS_TTL_SEC: '900'
+      REFRESH_TTL_DAYS: '30'
+      BCRYPT_ROUNDS: '12'
+      FACILITY_CODE: ${FACILITY_CODE:-BFC-L1}
+      SITE_TZ: Asia/Baghdad
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://ops.newport.local}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://ops.newport.local}
+      SYNC_MAX_OPS: '500'
+      SYNC_MAX_ROWS: '500'
+      SYNC_RETENTION_DAYS: '45'
+      SEED_DEMO: ${SEED_DEMO:-false}
+    command: sh -c "npx prisma migrate deploy && node dist/main.js"
+    networks: [newport]
+    expose:
+      - '3000'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/health/ready || exit 1']
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # موارد واقعية لمعمل: 4 نوى / 4 جيجا تكفي لـ ~400 جهاز مزامنة كل 45 ثانية
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 4G
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: newport-gateway
+    restart: unless-stopped
+    depends_on: [api]
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ../apps/desktop/dist:/usr/share/nginx/newport/desktop:ro
+      - ./logs:/var/log/nginx:rw
+    networks: [newport]
+
+  # نسخة احتياطية منطقية يومية + تخزين على قرص منفصل (يرجى تعديل VOLUME في prod لناس/س3)
+  backup:
+    image: postgres:16.6-alpine
+    container_name: newport-backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGUSER: ${POSTGRES_USER:-newport}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGHOST: postgres
+      PGDATABASE: ${POSTGRES_DB:-newport}
+      RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+    command: sh -c 'while true; do
+        ts=$(date -u +%Y%m%dT%H%M%SZ);
+        pg_dump -Fc --no-owner --file=/backups/newport-$ts.dump;
+        find /backups -name "newport-*.dump" -mtime +$${RETENTION_DAYS} -delete;
+        sleep 86400;
+      done'
+    volumes:
+      - backups:/backups
+    networks: [newport]
+
+volumes:
+  pgdata:
+    driver: local
+  backups:
+    driver: local
+
+networks:
+  newport:
+    driver: bridge

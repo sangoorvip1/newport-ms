@@ -1,0 +1,35 @@
+{
+  "name": "newport-ms",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Newport LP. LTD — Basra Fertilizer Complex (Plant 1 / Line 1) Management System monorepo",
+  "workspaces": [
+    "packages/*",
+    "apps/api",
+    "apps/desktop",
+    "apps/mobile"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "build": "npm run build -w @newport/domain && npm run build -w @newport/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:generate": "npm run prisma:generate -w @newport/api",
+    "db:ddl": "npm run ddl -w @newport/api",
+    "db:seed": "npm run seed -w @newport/api",
+    "api:dev": "npm run start:dev -w @newport/api",
+    "desktop:dev": "npm run dev -w @newport/desktop",
+    "matrix": "npm run matrix -w @newport/domain",
+    "desktop:typecheck": "npm run typecheck -w @newport/desktop",
+    "desktop:build": "npm run build -w @newport/desktop",
+    "mobile:typecheck": "npm run typecheck -w @newport/mobile",
+    "sync:check": "npm run test -w @newport/domain && npm run test -w @newport/api",
+    "test:all": "npm run test -w @newport/domain && npm run test -w @newport/api && npm run test -w @newport/mobile",
+    "typecheck:all": "npm run typecheck -w @newport/domain && npm run typecheck -w @newport/api && npm run typecheck -w @newport/desktop && npm run typecheck -w @newport/mobile"
+  },
+  "devDependencies": {
+    "typescript": "5.9.2"
+  }
+}

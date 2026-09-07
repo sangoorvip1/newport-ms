@@ -1,0 +1,37 @@
+import { Module } from '@nestjs/common';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { PrismaModule } from './common/prisma.service.js';
+import { AuthModule } from './security/auth.module.js';
+import { AccessGuard } from './security/access.guard.js';
+import { OrganizationModule } from './organization/organization.module.js';
+import { WorkOrderModule } from './workorder/work-order.module.js';
+import { ProductionModule } from './production/production.module.js';
+import { SyncModule } from './sync/sync.module.js';
+import { TimeModule } from './time/attendance.module.js';
+import { AuditModule } from './audit/audit.module.js';
+import { HealthController } from './health/health.controller.js';
+import { RateLimitGuard } from './common/rate-limit.guard.js';
+
+/**
+ * وحدات الخدمة النواة (Modular Monolith).
+ * كل وحدة = (controller + service + اختبارات) ويمكن فصلها لاحقًا كخدمة مستقلة
+ * دون تغيير في العقد، لأن التواصل بينها الآن عبر طبقة الخدمات فقط.
+ */
+@Module({
+  imports: [
+    PrismaModule,
+    AuthModule,
+    OrganizationModule,
+    WorkOrderModule,
+    ProductionModule,
+    SyncModule,
+    TimeModule,
+    AuditModule,
+  ],
+  controllers: [HealthController],
+  providers: [
+    { provide: APP_GUARD, useClass: RateLimitGuard }, // 1) حد المعدن/منع التخمين
+    { provide: APP_GUARD, useClass: AccessGuard }, // 2) المصادقة + الصلاحيات
+  ],
+})
+export class AppModule {}

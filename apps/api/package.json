@@ -1,0 +1,48 @@
+{
+  "name": "@newport/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Newport ERP/CIM core service — NestJS + Prisma/PostgreSQL (REST + sync protocol + SignalR-style SSE)",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/main.js",
+    "start:dev": "tsx watch src/main.ts",
+    "test": "vitest run",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev --name init",
+    "ddl": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > ../../docs/generated/schema.postgres.sql && echo '✓ docs/generated/schema.postgres.sql'",
+    "db:push": "prisma db push",
+    "seed": "tsx prisma/seed.ts",
+    "studio": "prisma studio",
+    "docs:schema": "node scripts/gen-schema-docs.mjs",
+    "docs:all": "npm run matrix --prefix ../../packages/domain && npm run ddl && npm run docs:schema",
+    "e2e": "node scripts/e2e-smoke.mjs",
+    "e2e:debug": "E2E_DEBUG=1 node scripts/e2e-smoke.mjs"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "11.1.6",
+    "@nestjs/core": "11.1.6",
+    "@nestjs/jwt": "11.0.0",
+    "@nestjs/platform-express": "11.1.6",
+    "@newport/domain": "*",
+    "@prisma/client": "6.19.0",
+    "bcryptjs": "3.0.2",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "zod": "4.1.12"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.3",
+    "@types/node": "22.10.2",
+    "@types/pg": "^8.11.11",
+    "prisma": "6.19.0",
+    "tsx": "4.20.6",
+    "typescript": "5.9.2",
+    "vitest": "3.2.4"
+  }
+}

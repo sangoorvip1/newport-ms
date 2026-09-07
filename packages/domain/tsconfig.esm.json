@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist/esm",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": [],
+    "tsBuildInfoFile": "../../node_modules/.cache/newport-domain-esm.tsbuildinfo"
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "src/**/*.spec.ts"
+  ]
+}

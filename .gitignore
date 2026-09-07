@@ -1,0 +1,49 @@
+# ── التبعية والمخرجات المولّدة ────────────────────────────────────────────
+node_modules/
+dist/
+build/
+out/
+coverage/
+*.tsbuildinfo
+.turbo/
+.vite/
+.cache/
+.pytest_cache/
+
+# ── قاعدة التطوير المضمّنة (embedded-postgres) — لا تُرفَع أبدًا ───────────
+# تُثبَّت على الجذر فقط — وإلا تجاهلت apps/*/src/data/ (طبقة البيانات في العملاء!)
+/data/
+/apps/api/data/
+/apps/api/.pgdata/
+/apps/api/.pgbin/
+/pgdata/
+
+# ── الأسرار والبيئات ──────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.production.example
+*.pem
+*.key
+*.p12
+*.mobileprovision
+deploy/.env
+
+# ── أدوات/أنظمة ───────────────────────────────────────────────────────────
+*.log
+/logs/
+/deploy/logs/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+.eslintcache
+
+# ── مخرجات Electron/React Native ──────────────────────────────────────────
+apps/desktop/release/
+apps/desktop/dist-electron/
+apps/mobile/.expo/
+apps/mobile/ios/Pods/
+apps/mobile/android/.gradle/
+apps/mobile/android/app/build/

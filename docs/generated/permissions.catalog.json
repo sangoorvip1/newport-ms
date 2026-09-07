@@ -1,0 +1,994 @@
+{
+  "permissions": [
+    {
+      "code": "org.dept.view",
+      "module": "org",
+      "action": "dept",
+      "nameAr": "عرض الهيكل التنظيمي",
+      "nameEn": "View organization structure",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "org.dept.manage",
+      "module": "org",
+      "action": "dept",
+      "nameAr": "إدارة الأقسام والشعب والوظائف",
+      "nameEn": "Manage departments/sections/positions",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "org.user.view",
+      "module": "org",
+      "action": "user",
+      "nameAr": "عرض المستخدمين",
+      "nameEn": "View users",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "org.user.manage",
+      "module": "org",
+      "action": "user",
+      "nameAr": "إنشاء/تعطيل المستخدمين وتعيين الشعب",
+      "nameEn": "Create/deactivate users & assign sections",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "org.role.manage",
+      "module": "org",
+      "action": "role",
+      "nameAr": "إدارة الأدوار وربطها بالشعب والصلاحيات",
+      "nameEn": "Manage roles & permission grants",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "org.delegation.manage",
+      "module": "org",
+      "action": "delegation",
+      "nameAr": "التفويض أثناء الإجازات/الانتداب",
+      "nameEn": "Manage delegations",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "auth.login",
+      "module": "auth",
+      "action": "login",
+      "nameAr": "تسجيل الدخول",
+      "nameEn": "Authenticate",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "sync.pull",
+      "module": "sync",
+      "action": "pull",
+      "nameAr": "سحب التغييرات إلى الجهاز",
+      "nameEn": "Pull server changes",
+      "maxScope": "ALL",
+      "offlineCapable": true
+    },
+    {
+      "code": "sync.push",
+      "module": "sync",
+      "action": "push",
+      "nameAr": "رفع التغييرات من الجهاز",
+      "nameEn": "Push local (offline) changes",
+      "maxScope": "ALL",
+      "offlineCapable": true
+    },
+    {
+      "code": "notif.view",
+      "module": "notif",
+      "action": "view",
+      "nameAr": "استقبال الإشعارات",
+      "nameEn": "Receive notifications",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "prod.log.view",
+      "module": "prod",
+      "action": "log",
+      "nameAr": "عرض سجلوبات الوردية الإنتاجية",
+      "nameEn": "View shift logs",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "prod.log.create",
+      "module": "prod",
+      "action": "log",
+      "nameAr": "تسجيل وردية إنتاجية (يوريا/أمونيا/أبراج)",
+      "nameEn": "Write shift log",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": true
+    },
+    {
+      "code": "prod.log.update",
+      "module": "prod",
+      "action": "log",
+      "nameAr": "تعديل سجلوبة الوردية (قبل الاعتماد)",
+      "nameEn": "Edit shift log",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": true
+    },
+    {
+      "code": "prod.log.approve",
+      "module": "prod",
+      "action": "log",
+      "nameAr": "اعتماد سجلوبة الوردية",
+      "nameEn": "Approve shift log",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "prod.param.create",
+      "module": "prod",
+      "action": "param",
+      "nameAr": "إدراج قراءات تشغيلية (T/P/F/L)",
+      "nameEn": "Log process parameters",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": true
+    },
+    {
+      "code": "prod.param.view",
+      "module": "prod",
+      "action": "param",
+      "nameAr": "عرض القراءات التشغيلية ومنحنياتها",
+      "nameEn": "View process parameters",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "prod.alarm.ack",
+      "module": "prod",
+      "action": "alarm",
+      "nameAr": "إقرار الإنذارات/الانحرافات",
+      "nameEn": "Acknowledge alarms & deviations",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": true
+    },
+    {
+      "code": "prod.downtime.create",
+      "module": "prod",
+      "action": "downtime",
+      "nameAr": "تسجيل ساعات التوقف الإنتاجي",
+      "nameEn": "Record downtime",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": true
+    },
+    {
+      "code": "prod.downtime.view",
+      "module": "prod",
+      "action": "downtime",
+      "nameAr": "عرض تحليل التوقفات",
+      "nameEn": "View downtime analysis",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "prod.utility.manage",
+      "module": "prod",
+      "action": "utility",
+      "nameAr": "إدارة تشغيل أبراج التبريد (خلايا/مرواح/كيمائيات)",
+      "nameEn": "Manage cooling tower operation",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": true
+    },
+    {
+      "code": "lab.sample.create",
+      "module": "lab",
+      "action": "sample",
+      "nameAr": "فتح طلب تحليل / سحب عينة",
+      "nameEn": "Create sample request",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": true
+    },
+    {
+      "code": "lab.result.enter",
+      "module": "lab",
+      "action": "result",
+      "nameAr": "إدخال نتائج التحاليل",
+      "nameEn": "Enter lab results",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": true
+    },
+    {
+      "code": "lab.result.verify",
+      "module": "lab",
+      "action": "result",
+      "nameAr": "تدقيق/اعتماد نتائج التحليل",
+      "nameEn": "Verify lab results",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "lab.report.export",
+      "module": "lab",
+      "action": "report",
+      "nameAr": "تصدير شهادات التحليل",
+      "nameEn": "Export certificates of analysis",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "lab.oos.manage",
+      "module": "lab",
+      "action": "oos",
+      "nameAr": "إدارة حالات خارج المطابقة (OOS/CAPA)",
+      "nameEn": "Manage out-of-spec cases",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "maint.asset.view",
+      "module": "maint",
+      "action": "asset",
+      "nameAr": "عرض سجل الأصول/المعدات",
+      "nameEn": "View asset register",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "maint.asset.manage",
+      "module": "maint",
+      "action": "asset",
+      "nameAr": "إدارة الأصول وشجرة المعدات",
+      "nameEn": "Manage assets & equipment tree",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "maint.wo.view",
+      "module": "maint",
+      "action": "wo",
+      "nameAr": "عرض أوامر الشغل",
+      "nameEn": "View work orders",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "maint.wo.create",
+      "module": "maint",
+      "action": "wo",
+      "nameAr": "طلب/فتح أمر شغل",
+      "nameEn": "Create work order",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": true
+    },
+    {
+      "code": "maint.wo.assign",
+      "module": "maint",
+      "action": "wo",
+      "nameAr": "إسناد أوامر الشغل للشُّعَب والفنيين",
+      "nameEn": "Assign work orders",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "maint.wo.execute",
+      "module": "maint",
+      "action": "wo",
+      "nameAr": "تنفيذ وتحديث حالة أمر الشغل",
+      "nameEn": "Execute & update work order",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": true
+    },
+    {
+      "code": "maint.wo.close",
+      "module": "maint",
+      "action": "wo",
+      "nameAr": "إغلاق أمر الشغل وتسجيل التفاصيل",
+      "nameEn": "Close work order",
+      "maxScope": "ALL",
+      "offlineCapable": true
+    },
+    {
+      "code": "maint.wo.cancel",
+      "module": "maint",
+      "action": "wo",
+      "nameAr": "إلغاء/تأجيل أمر الشغل",
+      "nameEn": "Cancel or defer work order",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "maint.pm.manage",
+      "module": "maint",
+      "action": "pm",
+      "nameAr": "إدارة خطط الصيانة الوقائية (PM) وتوليد أوامر الشغل",
+      "nameEn": "Manage PM plans",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "maint.condition.record",
+      "module": "maint",
+      "action": "condition",
+      "nameAr": "تسجيل قراءات الحالة (اهتزاز/حرارة/سمك/تزييت)",
+      "nameEn": "Record condition monitoring",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": true
+    },
+    {
+      "code": "maint.condition.view",
+      "module": "maint",
+      "action": "condition",
+      "nameAr": "عرض تقارير الحالة والاتجاهات",
+      "nameEn": "View condition monitoring reports",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "maint.permit.view",
+      "module": "maint",
+      "action": "permit",
+      "nameAr": "عرض تصاريح العمل",
+      "nameEn": "View permits to work",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "maint.permit.create",
+      "module": "maint",
+      "action": "permit",
+      "nameAr": "طلب تصريح عمل (ساخن/بارد/مكان مغلق/عمل على ارتفاع)",
+      "nameEn": "Request permit to work",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": true
+    },
+    {
+      "code": "maint.permit.approve",
+      "module": "maint",
+      "action": "permit",
+      "nameAr": "اعتماد/عزل وتصريح العمل (ISO/Loto)",
+      "nameEn": "Approve permit / isolation",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "maint.backlog.view",
+      "module": "maint",
+      "action": "backlog",
+      "nameAr": "عرض مخزون الأعمال والتكاليف",
+      "nameEn": "View backlog & maintenance cost",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "maint.downtime.verify",
+      "module": "maint",
+      "action": "downtime",
+      "nameAr": "تدقيق أسباب التوقف المشترك مع الإنتاج",
+      "nameEn": "Verify downtime causes with production",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "wh.item.view",
+      "module": "wh",
+      "action": "item",
+      "nameAr": "عرض أصناف المخزون والرصيد",
+      "nameEn": "View catalog & balances",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "wh.req.create",
+      "module": "wh",
+      "action": "req",
+      "nameAr": "طلب صرف مواد/قطع غيار لأمر شغل",
+      "nameEn": "Create material requisition",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": true
+    },
+    {
+      "code": "wh.req.approve",
+      "module": "wh",
+      "action": "req",
+      "nameAr": "اعتماد طلبات الصرف",
+      "nameEn": "Approve requisitions",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "wh.issue",
+      "module": "wh",
+      "action": "issue",
+      "nameAr": "تنفيذ الصرف وتقليل الرصيد",
+      "nameEn": "Issue stock",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "wh.grn",
+      "module": "wh",
+      "action": "grn",
+      "nameAr": "استلام مواد (GRN) وإضافتها للرصيد",
+      "nameEn": "Receive stock (GRN)",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "wh.return",
+      "module": "wh",
+      "action": "return",
+      "nameAr": "إرجاع مواد إلى المخزن",
+      "nameEn": "Return materials",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": true
+    },
+    {
+      "code": "wh.stocktake",
+      "module": "wh",
+      "action": "stocktake",
+      "nameAr": "الجرد الدوري وتسوية الأرصدة",
+      "nameEn": "Stock count & adjustments",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "wh.manage",
+      "module": "wh",
+      "action": "manage",
+      "nameAr": "إدارة المخازن والأماكن والحدود الدنيا",
+      "nameEn": "Manage warehouses & reorder limits",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "hr.emp.view",
+      "module": "hr",
+      "action": "emp",
+      "nameAr": "عرض بيانات الموظفين",
+      "nameEn": "View employee master",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "hr.emp.manage",
+      "module": "hr",
+      "action": "emp",
+      "nameAr": "إدارة بيانات الموظفين والعقود",
+      "nameEn": "Manage employee master & contracts",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "hr.att.view",
+      "module": "hr",
+      "action": "att",
+      "nameAr": "عرض سجلات البصمة والحضور",
+      "nameEn": "View biometric punches & attendance",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "hr.att.all",
+      "module": "hr",
+      "action": "att",
+      "nameAr": "عرض بصمة جميع الأقسام",
+      "nameEn": "View attendance across all sections",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "hr.att.correct",
+      "module": "hr",
+      "action": "att",
+      "nameAr": "تصحيح/معالجة البصمات الناقصة",
+      "nameEn": "Resolve missing/invalid punches",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "hr.att.import",
+      "module": "hr",
+      "action": "att",
+      "nameAr": "استيراد السجلات من أجهزة البصمة",
+      "nameEn": "Import raw logs from devices",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "hr.att.export_payroll",
+      "module": "hr",
+      "action": "att",
+      "nameAr": "تصدير كشوط الحضور إلى الرواتب",
+      "nameEn": "Export attendance to payroll",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "hr.shift.view",
+      "module": "hr",
+      "action": "shift",
+      "nameAr": "عرض جداول الوردیات/الدوام",
+      "nameEn": "View shift rosters",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "hr.shift.manage",
+      "module": "hr",
+      "action": "shift",
+      "nameAr": "إدارة جداول الوردیات والتناوبات",
+      "nameEn": "Manage shift rosters",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "hr.leave.view",
+      "module": "hr",
+      "action": "leave",
+      "nameAr": "عرض طلبات الإجازات الخاصة",
+      "nameEn": "View own leave requests",
+      "maxScope": "SELF",
+      "offlineCapable": false
+    },
+    {
+      "code": "hr.leave.request",
+      "module": "hr",
+      "action": "leave",
+      "nameAr": "تقديم طلب إجازة/مهمة/ساعات إضافية",
+      "nameEn": "Request leave / mission / OT",
+      "maxScope": "SELF",
+      "offlineCapable": true
+    },
+    {
+      "code": "hr.leave.approve",
+      "module": "hr",
+      "action": "leave",
+      "nameAr": "اعتماد الإجازات والساعات الإضافية",
+      "nameEn": "Approve leave & overtime",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "hr.form.create",
+      "module": "hr",
+      "action": "form",
+      "nameAr": "تعبئة النماذج الميدانية (استمارة)",
+      "nameEn": "Submit mobile form record",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": true
+    },
+    {
+      "code": "hr.form.view",
+      "module": "hr",
+      "action": "form",
+      "nameAr": "عرض النماذج الميدانية",
+      "nameEn": "View mobile form records",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "com.order.view",
+      "module": "com",
+      "action": "order",
+      "nameAr": "عرض أوامر البيع/أوامر الحمل (ZSD)",
+      "nameEn": "View sales/delivery orders",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "com.order.create",
+      "module": "com",
+      "action": "order",
+      "nameAr": "إدخال أوامر البيع والتحميل",
+      "nameEn": "Create sales orders & loading",
+      "maxScope": "DEPT",
+      "offlineCapable": true
+    },
+    {
+      "code": "com.order.confirm",
+      "module": "com",
+      "action": "order",
+      "nameAr": "تأكيد الكميات المسلّمة والتواقيع",
+      "nameEn": "Confirm delivered quantities",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "com.customer.manage",
+      "module": "com",
+      "action": "customer",
+      "nameAr": "إدارة بيانات العملاء وحساباتهم",
+      "nameEn": "Manage customers",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "com.pricing.manage",
+      "module": "com",
+      "action": "pricing",
+      "nameAr": "إدارة الأسعار والعقود والحصص",
+      "nameEn": "Manage pricing, contracts & quotas",
+      "maxScope": "SUBDEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "com.report.export",
+      "module": "com",
+      "action": "report",
+      "nameAr": "تصدير تقارير الكميات المسلّمة",
+      "nameEn": "Export delivery reports",
+      "maxScope": "DEPT",
+      "offlineCapable": false
+    },
+    {
+      "code": "fin.coa.view",
+      "module": "fin",
+      "action": "coa",
+      "nameAr": "عرض دليل الحسابات والأقيسة",
+      "nameEn": "View chart of accounts",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "fin.journal.manage",
+      "module": "fin",
+      "action": "journal",
+      "nameAr": "تسجيل قيود يومية/سندات قبض وصرف",
+      "nameEn": "Post journals, receipts & payments",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "fin.cost.view",
+      "module": "fin",
+      "action": "cost",
+      "nameAr": "عرض مراكز التكلفة وتوزيع المصروفات",
+      "nameEn": "View cost centres & allocation",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "fin.po.view",
+      "module": "fin",
+      "action": "po",
+      "nameAr": "عرض أوامر الشراء والموردين",
+      "nameEn": "View purchase orders",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "fin.po.approve",
+      "module": "fin",
+      "action": "po",
+      "nameAr": "اعتماد أوامر الشراء وفق سلطات التوقيع",
+      "nameEn": "Approve purchase orders (DoA)",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "fin.invoice.manage",
+      "module": "fin",
+      "action": "invoice",
+      "nameAr": "الفواتير والتسوية مع التجارية",
+      "nameEn": "Invoicing & matching with commercial",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "fin.grn_finance",
+      "module": "fin",
+      "action": "grn_finance",
+      "nameAr": "مطابقة الاستلام مع الفاتورة (3-way match)",
+      "nameEn": "Invoice/GRN/PO matching",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "fin.payroll.view",
+      "module": "fin",
+      "action": "payroll",
+      "nameAr": "عرض الرواتب ضمن الصلاحية",
+      "nameEn": "View payroll",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "fin.payroll.run",
+      "module": "fin",
+      "action": "payroll",
+      "nameAr": "تسوية الرواتب والصرف",
+      "nameEn": "Run & release payroll",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "fin.ar_collect",
+      "module": "fin",
+      "action": "ar_collect",
+      "nameAr": "متابعة التحصيل وأعمار الديون",
+      "nameEn": "AR follow-up & ageing",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "fin.budget.view",
+      "module": "fin",
+      "action": "budget",
+      "nameAr": "عرض الموازنة التشغيلية والاستهلاك",
+      "nameEn": "View budget & consumption",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "fin.budget.manage",
+      "module": "fin",
+      "action": "budget",
+      "nameAr": "إعداد الموازنة وربطها بمراكز التكلفة",
+      "nameEn": "Manage annual budget",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "fin.rate.manage",
+      "module": "fin",
+      "action": "rate",
+      "nameAr": "أسعار الصرف ومؤشر الأسعار",
+      "nameEn": "Manage exchange rates",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "doc.upload",
+      "module": "doc",
+      "action": "upload",
+      "nameAr": "رفع المخططات والتقارير والصور",
+      "nameEn": "Upload documents/photos",
+      "maxScope": "ALL",
+      "offlineCapable": true
+    },
+    {
+      "code": "doc.view",
+      "module": "doc",
+      "action": "view",
+      "nameAr": "عرض/تحميل الوثائق",
+      "nameEn": "View & download documents",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "doc.manage",
+      "module": "doc",
+      "action": "manage",
+      "nameAr": "إدارة التصنيف والدوران والتوثيق",
+      "nameEn": "Manage document control",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "report.view",
+      "module": "report",
+      "action": "view",
+      "nameAr": "عرض لوحات المؤشرات والتقارير",
+      "nameEn": "View dashboards & reports",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "report.export",
+      "module": "report",
+      "action": "export",
+      "nameAr": "تصدير تقارير (Excel/PDF)",
+      "nameEn": "Export reports",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "report.kpi.manage",
+      "module": "report",
+      "action": "kpi",
+      "nameAr": "تعريف أهداف المؤشرات (KPI)",
+      "nameEn": "Define KPI targets",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "audit.view",
+      "module": "audit",
+      "action": "view",
+      "nameAr": "عرض سجل التدقيق",
+      "nameEn": "View audit trail",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "audit.export",
+      "module": "audit",
+      "action": "export",
+      "nameAr": "تصدير سجل التدقيق",
+      "nameEn": "Export audit trail",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "admin.system",
+      "module": "admin",
+      "action": "system",
+      "nameAr": "إعدادات النظام العامة (نماذج، أكواد، تكاملات)",
+      "nameEn": "System configuration",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    }
+  ],
+  "roles": [
+    {
+      "code": "SYS_ADMIN",
+      "nameAr": "مدير النظام",
+      "nameEn": "System Administrator",
+      "defaultScope": "ALL",
+      "delegatableTo": [],
+      "descriptionAr": "إدارة الهيكل التنظيمي، المستخدمين، الأدوار، التكاملات، وسجل التدقيق. لا يملك صلاحيات اعتماد تشغيلية."
+    },
+    {
+      "code": "PLANT_MANAGER",
+      "nameAr": "مدير المعمل/المشروع",
+      "nameEn": "Plant Manager",
+      "defaultScope": "ALL",
+      "delegatableTo": [
+        "DEPT_MANAGER"
+      ],
+      "descriptionAr": "رؤية واعتماد كاملة على مستوى الخط الأول، سياسات التشغيل والصيانة والتصاريح."
+    },
+    {
+      "code": "DEPT_MANAGER",
+      "nameAr": "رئيس القسم",
+      "nameEn": "Department Manager",
+      "defaultScope": "DEPT",
+      "delegatableTo": [
+        "SECTION_HEAD"
+      ],
+      "descriptionAr": "اعتماد أوامر الشغل والإجازات والموازنة داخل قسمه، وإسناد العمل بين الشعب."
+    },
+    {
+      "code": "SECTION_HEAD",
+      "nameAr": "رئيس الشعبة",
+      "nameEn": "Section Head / Supervisor",
+      "defaultScope": "SUBDEPT",
+      "delegatableTo": [
+        "SHIFT_SUPERVISOR"
+      ],
+      "descriptionAr": "توزيع العمل على منتسبي الشعب، اعتماد مخرجاتهم، وإغلاق أوامر الشغل."
+    },
+    {
+      "code": "SHIFT_SUPERVISOR",
+      "nameAr": "مشرف الوردية",
+      "nameEn": "Shift Supervisor",
+      "defaultScope": "SUBDEPT",
+      "delegatableTo": [
+        "CONTROL_ROOM_OPERATOR"
+      ],
+      "descriptionAr": "قيادة الوردية، اعتماد سجلوبة الإنتاج، تنسيق الاستجابات العاجلة."
+    },
+    {
+      "code": "CONTROL_ROOM_OPERATOR",
+      "nameAr": "مراقب سيطرة",
+      "nameEn": "Control Room Operator",
+      "defaultScope": "SUBDEPT",
+      "descriptionAr": "قراءات تشغيلية، إنذارات، سجلوبة وردية، طلب صيانة عاجل."
+    },
+    {
+      "code": "FIELD_TECHNICIAN",
+      "nameAr": "فني صيانة (ميداني)",
+      "nameEn": "Field Technician",
+      "defaultScope": "SUBDEPT",
+      "descriptionAr": "تنفيذ أوامر الشغل من الهاتف دون اتصال، صور، قطع غيار، تصاريح."
+    },
+    {
+      "code": "PLANNER",
+      "nameAr": "مخطط صيانة",
+      "nameEn": "Maintenance Planner",
+      "defaultScope": "DEPT",
+      "descriptionAr": "خطط PM، جداول التوقفات (shutdown)، القطع الحرجة، المؤشرات."
+    },
+    {
+      "code": "LAB_ANALYST",
+      "nameAr": "محلل مختبر",
+      "nameEn": "Lab Analyst",
+      "defaultScope": "SUBDEPT",
+      "descriptionAr": "سحب العينات وإدخال النتائج ومطابقة الحدود."
+    },
+    {
+      "code": "LAB_SUPERVISOR",
+      "nameAr": "مسؤول المختبر",
+      "nameEn": "Lab Supervisor",
+      "defaultScope": "SUBDEPT",
+      "delegatableTo": [
+        "LAB_ANALYST"
+      ],
+      "descriptionAr": "تدقيق النتائج، اعتماد الشهادات، إدارة OOS/CAPA."
+    },
+    {
+      "code": "STORE_KEEPER",
+      "nameAr": "أمين المخزن",
+      "nameEn": "Store Keeper",
+      "defaultScope": "DEPT",
+      "descriptionAr": "الاستلام والصرف والجرد وتحديث الأرصدة."
+    },
+    {
+      "code": "WAREHOUSE_SUPERVISOR",
+      "nameAr": "مسؤول المخازن",
+      "nameEn": "Warehouse Supervisor",
+      "defaultScope": "DEPT",
+      "delegatableTo": [
+        "STORE_KEEPER"
+      ],
+      "descriptionAr": "اعتماد الصرف، الحدود الدنيا، التسويات، تقارير المخزون."
+    },
+    {
+      "code": "HR_OFFICER",
+      "nameAr": "موظف الموارد البشرية",
+      "nameEn": "HR Officer",
+      "defaultScope": "ALL",
+      "descriptionAr": "البصمة، معالجة النواقص، الإجازات، الجداول، البيانات الوظيفية."
+    },
+    {
+      "code": "PAYROLL_OFFICER",
+      "nameAr": "موظف الرواتب",
+      "nameEn": "Payroll Officer",
+      "defaultScope": "ALL",
+      "descriptionAr": "تسوية المستحقات والتسديدات والتصدير إلى المالية."
+    },
+    {
+      "code": "COMMERCIAL_OFFICER",
+      "nameAr": "الموظف التجاري",
+      "nameEn": "Commercial Officer",
+      "defaultScope": "DEPT",
+      "descriptionAr": "أوامر البيع والتحميل وحسابات العملاء والأسعار."
+    },
+    {
+      "code": "ACCOUNTANT",
+      "nameAr": "محاسب",
+      "nameEn": "Accountant",
+      "defaultScope": "ALL",
+      "descriptionAr": "القيود، السندات، التسويات، مطابقة الفواتير."
+    },
+    {
+      "code": "FINANCE_MANAGER",
+      "nameAr": "المدير المالي",
+      "nameEn": "Finance Manager",
+      "defaultScope": "ALL",
+      "delegatableTo": [
+        "ACCOUNTANT"
+      ],
+      "descriptionAr": "الموازنة، سلطات الصرف، التحصيل، التقارير المالية."
+    },
+    {
+      "code": "HSE_OFFICER",
+      "nameAr": "مسؤول السلامة",
+      "nameEn": "HSE Officer",
+      "defaultScope": "ALL",
+      "descriptionAr": "تصاريح العمل، العزل (LOTO)، الحوادث، المعدات الحرارية الحرجة."
+    },
+    {
+      "code": "DOC_CONTROLLER",
+      "nameAr": "مسؤول الوثائق",
+      "nameEn": "Document Controller",
+      "defaultScope": "ALL",
+      "descriptionAr": "تحكم النسخ، المخططات، تعليمات التشغيل، سجل التعليمات."
+    },
+    {
+      "code": "AUDITOR",
+      "nameAr": "مدقق (داخلي/خارجي)",
+      "nameEn": "Auditor",
+      "defaultScope": "ALL",
+      "descriptionAr": "قراءة شاملة على مستوى المنشأة + سجل التدقيق، دون تعديل."
+    },
+    {
+      "code": "READONLY_GUEST",
+      "nameAr": "مستخدم عرض فقط",
+      "nameEn": "Read-only Guest",
+      "defaultScope": "DEPT",
+      "descriptionAr": "لوحات ومؤشرات للشركة المالكة/الجهة الطالبة، دون بيانات الموظفين."
+    }
+  ]
+}
