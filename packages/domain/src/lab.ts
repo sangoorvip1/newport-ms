@@ -63,7 +63,7 @@ export function severityForVerdict(verdict: SpecVerdict, opts: { productGrade?: 
 }
 
 /**
- * آلة حالة حالة خارج المطابقة. مقصود أن تكون أضيق منenum القاعدة (العمود VarChar(24)):
+ * آلة حالة حالة خارج المطابقة. مقصود أن تكون أضيق من enum القاعدة (العمود VarChar(24)):
  * لا إغلاق بلا CAPA مكتوب ولا تجاهل بلا مُحقِّق — ينفّذها `LabService.updateOos`.
  */
 export const OOS_STATUSES = ['OPEN', 'INVESTIGATING', 'CAPA_DEFINED', 'EFFECTIVENESS_CHECK', 'CLOSED', 'REJECTED'] as const;

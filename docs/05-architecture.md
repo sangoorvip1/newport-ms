@@ -97,6 +97,7 @@
 | `lab/` | `lab.controller.ts` + `lab.service.ts` + `lab.module.ts` | `GET parameters/stats/samples/samples/:id/oos/certificates/:sampleId`, `POST samples`, `POST samples/:id/results`, `POST results/:id/verify`, `POST oos/:id` | العينة مملوكة للشعبة المنتِجة؛ المختبر (kind=LAB) يقرأ قسمه كله؛ الأرقام وحالات OOS والتدقيق من ختم الخادم |
 | `production/` | `production.module.ts` (controller + service في ملف واحد) | `GET params/trend`, `GET/POST shift-logs`, `POST shift-logs/:id/approve` | الاعتماد يختم `approvedById/approvedAt` server-side |
 | `time/` | `attendance.module.ts` (controller + service) | `POST punches/import/recalculate/corrections/corrections/:id/decide`, `GET daily/payroll-export` | تكامل ZKTeco (ملف/JSON) + إعادة حساب + تصحيحات معتمدة |
+| `documents/` | `documents.controller.ts` + `documents.service.ts` + `document-store.ts` | `POST upload`, `POST presign`, `PUT raw/:token`, `GET /`, `GET :id/content`, `POST :id/metadata`, `POST :id/delete` | قناة المرفقات الوحيدة؛ البصمة والحجم من البايتات الفعلية، والتوكن الموقّع (HMAC) هو التفويض في مسار الكاميرا بلا جلسة |
 | `sync/` | `sync.controller.ts` + `sync-engine.service.ts` | `POST push`, `GET pull`, `POST batch-plan`, `GET protocol` | المفصّل في §6 |
 | `audit/` | `audit.module.ts` (controller + service) | `GET /`, `GET stats` | قراءة فقط؛ الجدول append-only بقاعدة بيانات |
 | `health/` | `health.controller.ts` | `GET /api/health`, `GET /api/health/ready` | يفحص القاعدة + تطابق الهيكل + RBAC + التعارضات المفتوحة |
@@ -183,9 +184,12 @@ SELF     : { createdById / byUserId / userId }  // صفّه هو فقط
   - حارس إعادة الدخول: `app.internal_sync` GUC يمنع أن تُغذي كتابةُ السجل نفسها دفعةَ تغييرات لا نهائية.
 - **4 Views مادية** + `fn_refresh_reports()` (CONCURRENTLY، تحتاج فهرسًا فريدًا `ux_mv_*`)،
   ودوال تقارير `fn_wo_backlog_age()`, `fn_mtbf_mttr()`, `fn_archive_sync_log(days)`.
-- **المرفقات:** الصور/الملفات لا تُخزَّن كحقول على صفوف العمل بل في `documents`
-  (`entityType`+`entityId`)، والعمود `objectKey` جاهز لقناة رفع موقّعة (MinIO في `config.storage`)؛
-  دفع الصورة من الهاتف = عملية `document` في المزامنة، والبايتات لاحقًا.
+- **المرفقات:** الصور/الملفات لا تُخزَّن كحقول على صفوف العمل بل في `documents` (`entityType`+`entityId`).
+  الفهرس يُدفع مع المزامنة، والبايتات عبر قناة `/v1/documents`: `upload` (base64 للمكتب) أو `presign` +
+  `PUT /raw/:token` (كاميرا الهاتف). `sizeBytes`/`sha256` تُحسبان من البايتات في الخادم — لا تُقبلان من العميل،
+  وإلا زوّر عميل سجلَّ الوثائق بحجم/بصمة وهمية. السقف يُطبَّق أثناء البث لا بعد القبول.
+  **التوكن الموقّع**: `HMAC-SHA256(JWT_SECRET)` على حمولة البيانات الوصفية + انتهاء صلاحية — لذا مسار الكاميرا
+  `AllowAnonymous` بلا JWT، والملكية تُقرأ من التوكن نفسه (لا من رأس يرسله العميل).
 
 ---
 
@@ -308,13 +312,14 @@ src/ui/kit.tsx       RTL، أزرار كبيرة، قوائم اختيار بد�
 | `apps/api/test/schema-contract.spec.ts` | 5 | كل اسم جدول/عمود مستعمل في `SYNC_META`/`ENTITY_MAP` موجود في `schema.prisma`؛ لا snake_case ولا `#` في SQL الترحيل |
 | `apps/api/test/sync-triggers.spec.ts` | 5 | **على قاعدة حيّة**: registry=19، `trg_sync` مرة لكل جدول، `trg_bump_version` لا يمس `users`، `fn_align_number_sequences()`، لا سطر `#` |
 | `apps/api/test/serialization.spec.ts` | 3 | BigInt → JSON (صغير رقم، كبير نص، تثبيت مزدوج آمن) |
+| `apps/api/test/document-store.spec.ts` | 8 | التوكن الموقّع (HMAC/انتهاء/حمولة معدّلة)، رفض أنواع خطرة (SVG/EXE)، حراسة `../` في المسار، و`wx` ضد استبدال بايتات مسجّلة |
 | `apps/api/test/error-contract.spec.ts` | 3 | عقد الأخطاء (4xx يحافظ على الحقول، ترجمة، 5xx بكتمان + errorId) |
 | `apps/mobile/tests` | 8 | الطابور، التجميع، الإرسال، الدمج، قطع الشبكة |
 | `scripts/e2e-smoke.mjs` | 37 | HTTP حيّ: جاهزية، جلسة، قيد تغيير كلمة المرور، تدوير refresh + كشف إعادة الاستعمال، تطابق الهيكل/الصلاحيات، دورة أمر شغل، رفض انتقال 409، مزامنة push/pull/idempotency/الحماية، سجل تدقيق، ختم `syncSeq` |
 
 ```bash
-npm run test:all && npm run typecheck:all            # 122 فحصًا + typecheck نظيف (4 حِزَم)
-API_URL=… npm run e2e -w @newport/api                # 37/37
+npm run test:all && npm run typecheck:all            # 130 فحصًا + typecheck نظيف (4 حِزَم)
+API_URL=… npm run e2e -w @newport/api                # 68/68
 npm run docs:all -w @newport/api                     # مصفوفة + 03 + DDL + كتالوج (وتفحص أن كل رمز مذكور حقيقي)
 ```
 
@@ -376,7 +381,7 @@ npm run docs:all -w @newport/api                     # مصفوفة + 03 + DDL +
 | فجوة | أين | خطوة الإصلاح |
 |---|---|---|
 | الشهادة تُرجَّع JSON لا ملف PDF/Excel | `GET /v1/lab/certificates/:sampleId` | طباعة من الواجهة عبر قالب موقّع + `documents` (البيانات جاهزة ومُحكَمة) |
-| المرفقات: metadata فقط، بلا بايتات | `documents` + `config.storage` | presigned PUT/GET عبر MinIO + `POST /v1/documents/presign` |
+| لا محوّل كائنات خارجي (MinIO/S3) — الرفع على قرص الخادم فقط | `document-store.ts` | عميل كائنات + presign حقيقي من الدلو؛ `objectKey` بصيغته الحالية لا تتغير فيصبح التحويل إعدادًا لا عقدًا، وحارس `assertDriver` يزيل الرفض الصريح |
 | حدّ المعدن والكاش في الذاكرة | `rate-limit.guard.ts`, `permission.service.ts` | Redis عند أكثر من نسخة API (الملف يوضح البديل) |
 | لا دفع إشعارات (FCM/APNs) | `config.push` معطّل | `notif.view` + سحب الإشعارات عند `pull`؛ ثم expo-notifications |
 | لا مزامنة خلفية على iOS | `mobile/src/state/sync.ts` | مزامنة عند الفتح + `fetchContentAvailable`/BGTask قصير ≤ 30s |

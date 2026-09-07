@@ -51,7 +51,7 @@ export class FieldSync {
   static async create(): Promise<FieldSync> {
     const s = new FieldSync();
     const store = await openStore();
-    // حقولStore مُعرَّفة لاحقًا (openStore async) — تحويل واحد مركزي بدل تكراره
+    // حقول Store مُعرَّفة لاحقًا (openStore async) — تحويل واحد مركزي بدل تكراره
     (s as unknown as { store: LocalStore }).store = store;
     s.client = new SyncClient(store, syncTransport, { deviceId: await ensureDeviceId(), userId: '' });
     s.status = { ...s.status, ready: true };

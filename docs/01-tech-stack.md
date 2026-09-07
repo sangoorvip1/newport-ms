@@ -17,7 +17,7 @@
 | الصلاحيات | **RBAC (21 دورًا) + ABAC بالنطاق (SELF/TEAM/SUBDEPT/DEPT/ALL)** | الهيكل التنظيمي صارم (3 أقسام / 13 شعبة)، والنطاق هو الفرق بين "يرى شعبته" و"يرى قسمه" |
 | النشر | **Docker Compose على خادم المعمل + nginx TLS داخلي** | المعمل لا يعتمد على الإنترنت لإدارة الإنتاج؛ بوابة سحابية اختيارية للضوء الأخضر عن بُعد |
 
-**لماذا لم نختَر .NET (WPF/MAUI)؟** الخيار قائم تقنيًا، لكنه يفرض لغتين ومخططَي DTO وواجهتَي مزامنة مختلفتين، ويحتاج خبرة Windows-centric في فريق يخدم أيضًا iOS. في هذه المرحلة الأولوية لتطابق السلوك بين المكتب والميدان، وقد اختير **TypeScript عبر المنorepo**. ملاحظة أمانة تقنية: لم يُختبَر مسار .NET في هذه البيئة على الإطلاق (لا يوجد dotnet SDK في بيئة التطوير المستعملة)، فهو قرار موثّق لا مُنفَّذ.
+**لماذا لم نختَر .NET (WPF/MAUI)؟** الخيار قائم تقنيًا، لكنه يفرض لغتين ومخططَي DTO وواجهتَي مزامنة مختلفتين، ويحتاج خبرة Windows-centric في فريق يخدم أيضًا iOS. في هذه المرحلة الأولوية لتطابق السلوك بين المكتب والميدان، وقد اختير **TypeScript عبر monorepo**. ملاحظة أمانة تقنية: لم يُختبَر مسار .NET في هذه البيئة على الإطلاق (لا يوجد dotnet SDK في بيئة التطوير المستعملة)، فهو قرار موثّق لا مُنفَّذ.
 
 ## 2. البنية المرجعية (ما هو موجود فعلًا في المستودع)
 
@@ -97,7 +97,7 @@ newport-ms/
 ## 6. حدود الحل الحالية (بلا تجميل)
 
 1. **محرّك تنبيهات/جدولة غير منفّذ**: `report_schedule` و`notification` لهما مخطط وعقد مزامنة، لكن لا يوجد Worker مجدول بعد (خطوة تالية: BullMQ + Redis أو pg_cron).
-2. **تخزين المستندات**: `CONFIG.storage` يصف minio/s3/local، لكن قناة presigned upload غير منفّذة — المرفقات حاليًا تمر كـ `dataUrl` صغيرة عبر المزامنة؛ يجب إضافة رفع مباشر قبل أي استخدام بكميات كبيرة.
+2. **تخزين المستندات**: قناة الرفع منفّذة على **المخزن المحلي** فقط (`STORAGE_DRIVER=local`): `POST /v1/documents/upload` (base64) و`POST /v1/documents/presign` + `PUT /v1/documents/raw/:token` للكاميرا، مع سقف حجم يُطبَّق أثناء البث وبصمة sha256 محسوبة في الخادم. محوّلا minio/s3 غير منفّذين — ويُرفض الإعداد لهما صراحةً (409) بدل كتابة صامتة إلى مكان غير مضبوط.
 3. **تكامل SAP/ERP**: `integration_configs` مع `credentialRef` موجود، والمزامنة ثنائية الاتجاه للطلبات/الفواتير غير منفّذة.
 4. **حدود المعدل داخلية الذاكرة**: صالحة لنسخة خادم واحدة؛ مع أكثر من نسخة يلزم Redis.
 5. **شهادة التحليل تُبنى ككائن JSON لا كملف**: `GET /v1/lab/certificates/:sampleId` يُرجع صفوف الشهادة والتواقيع، أما طباعة PDF/Excel فواجهة مكتب (لم تُنفَّذ)؛ وربط الشهادة بأوامر البيع يتم عبر `documents`.
@@ -114,10 +114,10 @@ npm run test -w @newport/api          # 43 اختبارًا: الأمان/الم
 npm run typecheck -w @newport/desktop # tsconfig.json + tsconfig.electron.json
 npm run build -w @newport/desktop     # vite build (حزمة الإنتاج)
 npm run test -w @newport/mobile       # 8 اختبارات: الطابور دون اتصال + مخزن SQLite
-npm run test:all                      # 122 فحصًا (domain 71 + api 43 + mobile 8)
+npm run test:all                      # 130 فحصًا (domain 71 + api 51 + mobile 8)
 npm run typecheck:all                 # 4 حِزَم: domain + api + desktop + mobile (0 أخطاء)
 npm run docs:all -w @newport/api      # مصفوفة الوصول + docs/03 + DDL + كتالوج المخطط (كل الوثائق مشتقة من الكود)
-API_URL=http://127.0.0.1:3000/api DATABASE_URL=… npm run e2e -w @newport/api   # 58 فحصًا حيًّا على الخادم
+API_URL=http://127.0.0.1:3000/api DATABASE_URL=… npm run e2e -w @newport/api   # 68 فحصًا حيًّا على الخادم
 npm run db:ddl && node apps/api/scripts/gen-schema-docs.mjs   # إعادة توليد المخطط والكتالوج
 ```
 

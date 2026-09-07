@@ -186,7 +186,7 @@ const DOC: Record<string, SectionDoc> = {
       { name: 'تسجيل ساعات العمالة والمعدات', screen: 'LaborEntry', client: 'كلاهما', api: 'POST /v1/maintenance/work-orders/:id/labor · push: laborEntry' },
       { name: 'قياسات الحالة: حرارة سطح، سماكة، تصوير حراري', screen: 'ConditionReadings', client: 'هاتف', api: 'push: assetReading · maint.condition.record' },
       { name: 'طلب قطع غيار/مواد', screen: 'PartsRequest', client: 'كلاهما', api: 'push: partIssue' },
-      { name: 'المرفقات والصور الميدانية', screen: 'AttachmentSheet', client: 'كلاهما', api: 'push: document', note: 'الصور تُدفع كـ document بـ entityType=workOrder؛ البايتات عبر قناة رفع في 1ب' },
+      { name: 'المرفقات والصور الميدانية', screen: 'AttachmentSheet', client: 'كلاهما', api: 'push: document · POST /v1/documents/upload · PUT /v1/documents/raw/:token', note: 'الفهرس يُدفع مع المزامنة، والبايتات عبر قناة الرفع: JSON لسطح المكتب وpresign+PUT لكاميرا الهاتف' },
       { name: 'خطة PM للمعدات الحرارية', screen: 'PmPlanBoard', client: 'مكتب', api: 'pull: pmPlanInstance' },
       { name: 'مؤشرات MTBF/MTTR والتكدّس', screen: 'MaintenanceCockpit', client: 'مكتب', api: 'دوال fn_mtbf_mttr / fn_wo_backlog_age في القاعدة' },
     ],
@@ -210,7 +210,7 @@ const DOC: Record<string, SectionDoc> = {
     features: [
       { name: 'قراءات الاهتزاز وحرارة المحامل', screen: 'VibrationLog', client: 'هاتف', api: 'push: assetReading' },
       { name: 'خطة تحليل الزيت وسحب العينات', screen: 'OilSamplePlan', client: 'كلاهما', api: 'push: labSample', note: 'entityType=ASSET' },
-      { name: 'تقرير المحاذاة/الموازنة المرفق', screen: 'AlignmentReport', client: 'مكتب', api: 'push: document' },
+      { name: 'تقرير المحاذاة/الموازنة المرفق', screen: 'AlignmentReport', client: 'مكتب', api: 'POST /v1/documents/upload · push: document' },
       { name: 'أوامر الشغل وسجل العمالة', screen: 'TasksScreen', client: 'كلاهما', api: '/v1/maintenance/work-orders' },
       { name: 'خطة PM لكل معدن دوّار', screen: 'PmPlanBoard', client: 'مكتب', api: 'pull: pmPlanInstance' },
     ],
@@ -257,7 +257,7 @@ const DOC: Record<string, SectionDoc> = {
     features: [
       { name: 'بطاقة صمام داخل/خارج الورشة', screen: 'ValveShopCard', client: 'كلاهما', api: 'push: workOrder · push: asset' },
       { name: 'نتائج اختبار الإغلاق والضغط', screen: 'ValveTestResult', client: 'هاتف', api: 'push: assetReading' },
-      { name: 'سجل شهادات PSV وإعادة الاختبار', screen: 'PsvRegister', client: 'مكتب', api: 'documents · pull: pmPlanInstance' },
+      { name: 'سجل شهادات PSV وإعادة الاختبار', screen: 'PsvRegister', client: 'مكتب', api: 'GET /v1/documents/:id/content · pull: pmPlanInstance' },
       { name: 'ربط الصمام بموقعه/خطه', screen: 'ValveMap', client: 'مكتب', api: 'assets (tag/lineNo/assetType)' },
       { name: 'صرف/إرجاع صمام مجدّد من المخزون', screen: 'StoreIssue', client: 'مكتب', api: 'wh.issue · wh.return' },
     ],
@@ -280,7 +280,7 @@ const DOC: Record<string, SectionDoc> = {
     features: [
       { name: 'خطة المعايرة ومتابعة انتهائها', screen: 'CalibrationPlan', client: 'مكتب', api: 'pull: pmPlanInstance' },
       { name: 'بطاقة معايرة (قبل/بعد/انحراف)', screen: 'CalibrationCard', client: 'هاتف', api: 'push: assetReading' },
-      { name: 'نتائج اختبار الحلقة و ESD', screen: 'LoopTestSheet', client: 'كلاهما', api: 'push: workOrderLog · push: document' },
+      { name: 'نتائج اختبار الحلقة و ESD', screen: 'LoopTestSheet', client: 'كلاهما', api: 'push: workOrderLog · push: document · GET /v1/documents?entityType=workOrder' },
       { name: 'سجل تغييرات منطق DCS/PLC', screen: 'LogicChangeLog', client: 'مكتب', api: 'documents + audit_trails', note: 'جدول تغييرات مخصص في 1ب' },
       { name: 'أوامر شغل الأجهزة الدقيقة', screen: 'TasksScreen', client: 'كلاهما', api: '/v1/maintenance/work-orders' },
     ],
@@ -304,7 +304,7 @@ const DOC: Record<string, SectionDoc> = {
       { name: 'طلب صيانة عام من أي شعبة', screen: 'NewWorkOrderScreen', client: 'كلاهما', api: 'POST /v1/maintenance/work-orders' },
       { name: 'سجل الأدوات المستعارة/المُرجَّعة', screen: 'ToolCrib', client: 'مكتب', api: 'push: asset · push: laborEntry', note: 'الأداة تُسجَّل كأصل فرعي' },
       { name: 'خطط صيانة المباني و HVAC', screen: 'PmPlanBoard', client: 'مكتب', api: 'pull: pmPlanInstance' },
-      { name: 'تذكرة تنظيف/رفع مخلفات مع مرفقات', screen: 'WasteTicket', client: 'كلاهما', api: 'push: document' },
+      { name: 'تذكرة تنظيف/رفع مخلفات مع مرفقات', screen: 'WasteTicket', client: 'كلاهما', api: 'push: document · POST /v1/documents/presign' },
       { name: 'سجل السلامة للمقاولين الخارجيين', screen: 'ContractorLog', client: 'مكتب', api: 'users/employees (CONTRACTOR)' },
     ],
     rules: [
@@ -352,7 +352,7 @@ const DOC: Record<string, SectionDoc> = {
       { name: 'أمر بيع + فحص حد الائتمان', screen: 'SalesOrderSheet', client: 'مكتب', api: 'sales_orders · com.order.create/confirm' },
       { name: 'إذن تحميل وتذكرة وزن', screen: 'LoadingTicket', client: 'كلاهما', api: 'sales_order_lines.ticketInNo/ticketOutNo' },
       { name: 'فواتير البيع', screen: 'InvoiceEditor', client: 'مكتب', api: 'sales_invoices · fin.invoice.manage' },
-      { name: 'ربط الدفعة بشهادة التحليل', screen: 'BatchCoaLink', client: 'مكتب', api: 'lab CoA · documents' },
+      { name: 'ربط الدفعة بشهادة التحليل', screen: 'BatchCoaLink', client: 'مكتب', api: 'GET /v1/lab/certificates/:sampleId · POST /v1/documents/:id/metadata' },
       { name: 'كشف حساب عميل وأعمار الذمم', screen: 'CustomerLedger', client: 'مكتب', api: 'com.customer.manage · report views' },
       { name: 'تصدير تقرير المبيعات', screen: 'SalesReport', client: 'مكتب', api: 'com.report.export' },
     ],

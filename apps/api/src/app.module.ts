@@ -7,6 +7,7 @@ import { OrganizationModule } from './organization/organization.module.js';
 import { WorkOrderModule } from './workorder/work-order.module.js';
 import { ProductionModule } from './production/production.module.js';
 import { LabModule } from './lab/lab.module.js';
+import { DocumentsModule } from './documents/documents.module.js';
 import { SyncModule } from './sync/sync.module.js';
 import { TimeModule } from './time/attendance.module.js';
 import { AuditModule } from './audit/audit.module.js';
@@ -27,6 +28,7 @@ import { ErrorContractFilter } from './common/error-contract.filter.js';
     WorkOrderModule,
     ProductionModule,
     LabModule,
+    DocumentsModule,
     SyncModule,
     TimeModule,
     AuditModule,

@@ -320,3 +320,65 @@ export const pullRequestDto = z.object({
   limit: z.number().int().min(1).max(2000).default(500),
 });
 export type PullRequestDto = z.infer<typeof pullRequestDto>;
+
+/* ── الوثائق والصور الميدانية (قناة المستودع) ────────────────────────────
+ * مساران متكافئان: JSON+base64 (مناسب لسطح المكتب ولصور صغيرة) أو presign+PUT خام
+ * (مناسب لكاميرا الهاتف: لا يضاعف الحجم 33% ولا يستهلك ذاكرة الجهاز).
+ * الحقلان sizeBytes/sha256 **لا يقبلهما الخادم من العميل** — يُحسبان من البايتات الفعلية،
+ * وإلا صار بالإمكان تضليل سجل الوثائق بحجم/بصمة وهمية.
+ */
+export const DOCUMENT_ENTITY_TYPES = ['workOrder', 'workOrderLog', 'labSample', 'labResult', 'shiftLog', 'downtime', 'permit', 'asset', 'assetReading', 'leaveRequest', 'partIssue'] as const;
+
+const documentCore = {
+  id: uuid.optional(),
+  docType: z.string().min(2).max(32),
+  titleAr: z.string().min(2).max(240),
+  categoryCode: z.string().max(32).optional(),
+  code: z.string().max(48).optional(),
+  entityType: z.enum(DOCUMENT_ENTITY_TYPES).optional(),
+  entityId: uuid.optional(),
+  originalName: z.string().min(2).max(240),
+  mimeType: z.string().min(4).max(80),
+  isEncrypted: z.boolean().default(false),
+};
+
+export const documentUploadDto = z.object({
+  ...documentCore,
+  /** حتى ~8 ميغابايت بعد فك الترميز (الحد في الخادم STORAGE_MAX_UPLOAD_BYTES) */
+  dataBase64: z.string().min(8).max(14_000_000),
+});
+export type DocumentUploadDto = z.infer<typeof documentUploadDto>;
+
+/** طلب رابط رفع خام — يعيد الخادم توكنًا موقّعًا قصير العمر لمسار PUT */
+export const documentPresignDto = z.object({
+  ...documentCore,
+  /** الحجم المتوقع من العميل — يُستعمل كسقف معلن فقط؛ السقف الحقيقي يُطبَّق أثناء البث */
+  expectedSizeBytes: z.number().int().positive().max(64 * 1024 * 1024).optional(),
+});
+export type DocumentPresignDto = z.infer<typeof documentPresignDto>;
+
+/** تحديث بيانات وصفية (شعبة الوثائق فقط) — البايتات نفسها لا تُستبدل من هنا */
+export const documentMetadataDto = z
+  .object({
+    titleAr: z.string().min(2).max(240).optional(),
+    docType: z.string().min(2).max(32).optional(),
+    categoryCode: z.string().max(32).optional(),
+    code: z.string().max(48).optional(),
+    status: z.enum(['DRAFT', 'ISSUED', 'SUPERSEDED', 'OBSOLETE', 'APPROVED']).optional(),
+    revision: z.string().max(12).optional(),
+    entityType: z.enum(DOCUMENT_ENTITY_TYPES).optional(),
+    entityId: uuid.optional(),
+    isEncrypted: z.boolean().optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'لا تحديث فارغ' });
+export type DocumentMetadataDto = z.infer<typeof documentMetadataDto>;
+
+export const documentListQueryDto = z.object({
+  entityType: z.enum(DOCUMENT_ENTITY_TYPES).optional(),
+  entityId: uuid.optional(),
+  docType: z.string().max(32).optional(),
+  mine: z.boolean().default(false),
+  take: z.number().int().min(1).max(100).default(25),
+  skip: z.number().int().min(0).default(0),
+});
+export type DocumentListQueryDto = z.infer<typeof documentListQueryDto>;

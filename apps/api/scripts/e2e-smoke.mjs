@@ -417,6 +417,73 @@ async function main() {
   check('GET /v1/lab/stats — مؤشرات الدورة والمطابقة', ok(labStats.status) && typeof labStats.body?.openOosCases === 'number' && labStats.body?.samples?.total >= 1, JSON.stringify(labStats.body));
   void oosId;
 
+  // 8) قناة الوثائق: رفع JSON، بثّ بايتات، presign+PUT خام، سقف الحجم، عزل النطاق.
+  //    يعمل بحساب heat.tech لا sysadmin: هذا الأخير READ_ONLY فيُرفض رفعه بقصد — والفحص يثبت ذلك أيضًا.
+  {
+    const { createHash } = await import('node:crypto');
+    const techLogin = await loginWithFallback('heat.tech', [NEW_PASSWORD, PASSWORD], 'ANDROID');
+    if (!techLogin) throw new Error('تعذّر دخول heat.tech لفحص الوثائق');
+    let techToken = techLogin.accessToken;
+    if (techLogin.mustChangePwd === true) {
+      const saved = accessToken;
+      accessToken = techToken;
+      await call('POST', '/v1/auth/change-password', { currentPassword: techLogin.password, newPassword: NEW_PASSWORD });
+      const again = await loginWithFallback('heat.tech', [NEW_PASSWORD], 'ANDROID');
+      accessToken = saved;
+      techToken = again?.accessToken ?? techToken;
+    }
+    const own = await call('GET', '/v1/work-orders?take=1', undefined, { token: techToken });
+    const docWoId = own.body?.items?.[0]?.id ?? woId;
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==', 'base64');
+    const up = await call('POST', '/v1/documents/upload', {
+      docType: 'PHOTO',
+      titleAr: 'صورة توثيق التنفيذ',
+      originalName: 'exec.png',
+      mimeType: 'image/png',
+      dataBase64: png.toString('base64'),
+      entityType: 'workOrder',
+      entityId: docWoId,
+    }, { token: techToken });
+    const docId = up.body?.id;
+    check('POST /v1/documents/upload — بصمة وحجم من البايتات لا من العميل', ok(up.status) && /^[0-9a-f]{64}$/.test(String(up.body?.sha256)) && up.body?.sizeBytes === png.length, `status=${up.status} key=${up.body?.objectKey}`);
+
+    const dl = await fetch(`${API}/v1/documents/${docId}/content`, { headers: { authorization: `Bearer ${techToken}` } });
+    const back = Buffer.from(await dl.arrayBuffer());
+    check('GET /v1/documents/:id/content — نفس البايتات وهيدر البصمة', dl.status === 200 && createHash('sha256').update(back).digest('hex') === up.body?.sha256 && dl.headers.get('x-content-sha256') === up.body?.sha256, `status=${dl.status} bytes=${back.length}`);
+
+    const ps = await call('POST', '/v1/documents/presign', { docType: 'PHOTO', titleAr: 'لقطة هاتف', originalName: 'shot.jpg', mimeType: 'image/jpeg', entityType: 'workOrder', entityId: docWoId }, { token: techToken });
+    const putRes = await fetch(ps.body?.url ?? `${API}/nope`, { method: 'PUT', headers: { 'content-type': 'image/jpeg' }, body: png });
+    const putBody = await putRes.json().catch(() => null);
+    check('presign → PUT خام (بلا جلسة) يُنشئ الوثيقة بالتوكن الموقّع', ok(ps.status) && putRes.status === 201 && putBody?.objectKey?.startsWith('docs/'), `put=${putRes.status} key=${putBody?.objectKey ?? ''}`);
+
+    const over = await fetch((await call('POST', '/v1/documents/presign', { docType: 'SCAN', titleAr: 'ملف ضخم', originalName: 'big.pdf', mimeType: 'application/pdf' }, { token: techToken })).body?.url ?? `${API}/nope`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/pdf' },
+      body: Buffer.alloc(9 * 1024 * 1024, 7),
+    });
+    check('تجاوز STORAGE_MAX_UPLOAD_BYTES أثناء البث ⇒ 413', over.status === 413, `status=${over.status}`);
+
+    const badMime = await call('POST', '/v1/documents/upload', { docType: 'PHOTO', titleAr: 'تنفيذ', originalName: 'run.exe', mimeType: 'application/x-msdownload', dataBase64: png.toString('base64') }, { token: accessToken });
+    check('رفض أنواع الملفات خارج القائمة الصريحة (400 + allowed)', badMime.status === 400 && Array.isArray(badMime.body?.allowed), `status=${badMime.status}`);
+
+    const forged = await fetch(`${API}/v1/documents/raw/${'x'.repeat(40)}.deadbeef`, { method: 'PUT', body: png });
+    // doc.manage وحدها (بدون doc.upload) تُنشئ وثيقة غير مرتبطة، لكن لا تُخيطها بأمر شغل — انظر docs/05 §5
+    const manageOnly = await call('POST', '/v1/documents/upload', { docType: 'MEMO', titleAr: 'مذكرة إدارة الأنظمة', originalName: 'memo.txt', mimeType: 'text/plain', dataBase64: Buffer.from('مذكرة اختبار', 'utf8').toString('base64') }, { token: accessToken });
+    const manageAttached = await call('POST', '/v1/documents/upload', { docType: 'PHOTO', titleAr: 'لصق بأمر شغل', originalName: 'p.png', mimeType: 'image/png', dataBase64: png.toString('base64'), entityType: 'workOrder', entityId: docWoId }, { token: accessToken });
+    check('doc.manage بلا doc.upload: وثيقة غير مرتبطة تُقبل، واللصق بأمر شغل يُرفض 403', ok(manageOnly.status) && manageAttached.status === 403, `standalone=${manageOnly.status} attached=${manageAttached.status}`);
+
+    const shortBody = await call('POST', '/v1/documents/upload', { docType: 'PHOTO', originalName: 'x.png', mimeType: 'image/png', dataBase64: png.toString('base64') }, { token: techToken });
+    check('حقل ناقص ⇒ 400 + issues بمسار الحقل (عقد ZodPipe، لا 500)', shortBody.status === 400 && (shortBody.body?.issues ?? []).some((i) => i.path === 'titleAr'), `status=${shortBody.status} issues=${(shortBody.body?.issues ?? []).map((i) => i.path).join(',')}`);
+
+    const badId = await fetch(`${API}/v1/documents/not-a-uuid/content`, { headers: { authorization: `Bearer ${techToken}` } });
+    check('معرّف غير UUID في المسار ⇒ 400 من ParseUUIDPipe', badId.status === 400, `status=${badId.status}`);
+
+    check('توكن موقّع مزوّر ⇒ 403 (HMAC لا يحتاج جلسة)', forged.status === 403, `status=${forged.status}`);
+
+    const listed = await call('GET', `/v1/documents?entityType=workOrder&entityId=${docWoId}`, undefined, { token: techToken });
+    check('GET /v1/documents؟entityType=workOrder يعيد روابط تحميل محسوبة', ok(listed.status) && (listed.body?.items ?? []).every((d) => d.downloadPath?.includes('/content')), `total=${listed.body?.total} scope=${listed.body?.scope}`);
+  }
+
   if (process.env.DATABASE_URL) {
     const { default: pg } = await import('pg');
     const c = new pg.Client(process.env.DATABASE_URL);

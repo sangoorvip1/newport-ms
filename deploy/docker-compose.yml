@@ -80,6 +80,13 @@ services:
       SYNC_MAX_ROWS: '500'
       SYNC_RETENTION_DAYS: '45'
       SEED_DEMO: ${SEED_DEMO:-false}
+      # الوثائق وصور الميدان: المخزن المحلي المنفَّذ (minio/s3 مرفوض صراحةً حتى يُضاف عميل الكائنات)
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      STORAGE_LOCAL_DIR: storage/documents
+      STORAGE_MAX_UPLOAD_BYTES: '8388608'
+    volumes:
+      # على قرص الخادم؛ لازم تُضمَّن هذه الملفات في نسخة الاحتياط (القاعدة وحدها لا تكفي)
+      - ${STORAGE_HOST_DIR:-./storage}/documents:/app/apps/api/storage/documents
     command: sh -c "npx prisma migrate deploy && node dist/main.js"
     networks: [newport]
     expose:

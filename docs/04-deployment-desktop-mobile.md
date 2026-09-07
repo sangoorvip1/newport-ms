@@ -59,6 +59,8 @@ docker compose -f deploy/docker-compose.yml up -d
   `log_min_duration_statement=500`، healthcheck بـ `pg_isready`.
 - **api** — `command: sh -c "npx prisma migrate deploy && node dist/main.js"` (الترحيل عند الإقلاع)،
   `BCRYPT_ROUNDS=12`، `SITE_TZ=Asia/Baghdad`، حدود `SYNC_MAX_OPS/SYNC_MAX_ROWS=500`،
+  ومخزن الوثائق `STORAGE_DRIVER=local` + `STORAGE_LOCAL_DIR=storage/documents` + `STORAGE_MAX_UPLOAD_BYTES=8388608`
+  (المجلد معيَّن volume في compose؛ `minio`/`s3` مرفوضان صراحةً حتى يُضاف عميل الكائنات)،
   `SYNC_RETENTION_DAYS=45`، healthcheck على `/api/health/ready`.
 - **nginx** — 80→443، TLS، `client_max_body_size 40m` للمرفقات، `limit_req_zone … rate=25r/s`،
   `root /usr/share/nginx/newport/desktop` لواجهة المكتب (نسخة الويب للمراجعة).
@@ -151,7 +153,7 @@ curl -s https://ops.newport.local/api/health/ready
 ثم:
 - `GET /api/v1/org/drift` → `"isAligned":true` (الهيكل لا يزيد ولا ينقص عن المرجع).
 - `GET /api/v1/org/permissions-verify` → `"inSync":true`, `expectedGrants=actualGrants=36`.
-- `npm run e2e -w @newport/api` → **37/37** (دخان حيّ على HTTP: جلسة، قيد تغيير كلمة المرور،
+- `npm run e2e -w @newport/api` → **68/68** (دخان حيّ على HTTP: جلسة، قيد تغيير كلمة المرور،
   دورة أمر شغل، idempotency، حماية الحقول المعتمدة، pull، سجل تدقيق).
 
 ---
@@ -298,7 +300,7 @@ npm run prisma:generate -w @newport/api
 npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
 SEED_DEMO=true npm run seed -w @newport/api
 npm run build -w @newport/api && (cd apps/api && node dist/main.js &)
-API_URL=http://127.0.0.1:3000/api npm run e2e -w @newport/api   # 37/37
+API_URL=http://127.0.0.1:3000/api npm run e2e -w @newport/api   # 68/68
 npm run test:all && npm run typecheck:all                        # 88 فحصًا + typecheck نظيف
 ```
 
@@ -318,7 +320,7 @@ npm run test:all && npm run typecheck:all                        # 88 فحصًا
 | 1 | الهيكل التنظيمي مطابق (3/13) دون زيادة أو نقصان | `GET /api/v1/org/drift` → `isAligned:true` ✅ |
 | 2 | RBAC مطابق للمصفوفة المولّدة | `GET /api/v1/org/permissions-verify` → `inSync:true` ✅ |
 | 3 | الترحيلات مطبَّقة على قاعدة فارغة من الصفر | `prisma migrate deploy` بلا أخطاء ✅ |
-| 4 | المزامنة تعمل من جهاز حقيقي/محاكي | `npm run e2e -w @newport/api` → 37/37 ✅ |
+| 4 | المزامنة تعمل من جهاز حقيقي/محاكي | `npm run e2e -w @newport/api` → 68/68 ✅ |
 | 5 | لا تسريب لأسرار في المستودع | `git ls-files \| xargs grep -l "JWT_SECRET=***` → فارغ |
 | 6 | النسخ الاحتياطي مُختبَر بالاسترجاع | `pg_restore` على خادم اختبار (ربع سنوي) |
 | 7 | ساعة الخادم وأجهزة البصمة مضبوطة | `timedatectl` + `TZ=Asia/Baghdad` في كل الخدمات |

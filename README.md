@@ -60,7 +60,7 @@ npm run build -w @newport/api && npm run start -w @newport/api     # http://127.
 المتغيرات الأساسية في `apps/api/.env` (انظر `deploy/.env.production.example`):
 أسماء المتغيرات كما هي في `apps/api/src/config.ts` (لا أسماء تقريبية):
 `DATABASE_URL`, `JWT_SECRET`, `JWT_ACCESS_TTL_SEC`, `REFRESH_TTL_DAYS`, `BCRYPT_ROUNDS`, `FACILITY_CODE=BFC-L1`,
-`SITE_TZ=Asia/Baghdad`, `CORS_ORIGINS`, `PUBLIC_BASE_URL`, `SYNC_MAX_OPS`, `SYNC_MAX_ROWS`, `SYNC_RETENTION_DAYS`,
+`SITE_TZ=Asia/Baghdad`, `CORS_ORIGINS`, `PUBLIC_BASE_URL`, `SYNC_MAX_OPS`, `SYNC_MAX_ROWS`, `SYNC_RETENTION_DAYS`, `STORAGE_DRIVER=local`, `STORAGE_MAX_UPLOAD_BYTES`,
 `STORAGE_DRIVER`, `MAX_LOGIN_ATTEMPTS`, `LOCKOUT_MINUTES`.
 
 الحسابات المزروعة: كلمة المرور الافتراضية `Newport#2026` مع `mustChangePwd=true`
@@ -74,10 +74,10 @@ npm run build -w @newport/api && npm run start -w @newport/api     # http://127.
 فوق كل ما يلي مُنفَّذ في هذه البيئة، لا على الورق:
 
 ```bash
-npm run test:all          # domain 71 · api 43 (منها 5 على قاعدة حيّة) · mobile 8  = 122 فحصًا
+npm run test:all          # domain 71 · api 51 (منها 5 على قاعدة حيّة) · mobile 8  = 130 فحصًا
 npm run typecheck:all     # domain · api · desktop (renderer+electron) · mobile — بلا أخطاء
 npm run docs:all -w @newport/api   # مصفوفة الوصول + docs/03 + DDL + كتالوج المخطط (كلها مشتقة من الكود)
-npm run e2e -w @newport/api   # 58/58 فحص HTTP حيّ
+npm run e2e -w @newport/api   # 68/68 فحص HTTP حيّ
 ```
 
 - `GET /api/health/ready` → `{"database":"ok","organization":"3 dept / 13 sub-dept (reference: 3/13)","rbac":"21/21 roles, 94/94 permissions","openConflicts":"0"}`
@@ -89,6 +89,8 @@ npm run e2e -w @newport/api   # 58/58 فحص HTTP حيّ
 - المختبر (عبر `GET/POST /v1/lab/*`): عينة من شعبة إنتاج ⇒ رقم `SMP-…` من تسلسل القاعدة، تجاوز المواصفة ⇒ حالة OOS تلقائيًا، تدقيق نتيجة واحدة ⇒ تبقى `RESULTED`، الشهادة ⇒ `409` حتى إغلاق OOS ثم صفوف الشهادة بتواقيعها.
 - التدقيق: `audit_trails` append-only بمؤجّل قاعدة، وكل صف في change-log مختوم بـ `syncSeq`.
 - عقد الأخطاء: `4xx` برسالة عربية + حقول الحارس (`required`/`yourGrants`)، و`5xx` بـ `errorId` بلا تسريب تفاصيل القاعدة.
+- الوثائق: رفع PNG مرفق بأمر شغل ⇒ بصمة وحجم من البايتات؛ تحميله يعيد نفس البتّات وهيدر `x-content-sha256`؛
+  `presign` + `PUT raw` يعمل بلا جلسة (التوكن هو التفويض) ويرفض 413 عند تجاوز الحد أثناء البث؛ و403 لشعبة أخرى تطلب المرفق.
 - المخالجات المكتشفة أثناء التحقق الحيّ أُصلحت ولها فحوص تمنع عودتها (`docs/05` §10).
 
 **غير متحقق هنا:** ملفات Docker/nginx وأدوات .NET (لا توجد في بيئة التطوير) — مذكورة كنماذج إعداد جاهزة للنشر.

@@ -47,3 +47,6 @@ apps/mobile/.expo/
 apps/mobile/ios/Pods/
 apps/mobile/android/.gradle/
 apps/mobile/android/app/build/
+# مخزن الملفات المحلي (صور الميدان/الوثائق) — لا يُيدَّع
+/apps/api/storage/
+/storage/
