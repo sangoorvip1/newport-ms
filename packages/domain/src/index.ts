@@ -2,6 +2,7 @@ export * from './org.js';
 export * from './permissions.js';
 export * from './roles.js';
 export * from './workorder.js';
+export * from './lab.js';
 export * from './sync.js';
 export * from './dto.js';
 export * from './matrix.js';

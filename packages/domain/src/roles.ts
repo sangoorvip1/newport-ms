@@ -71,10 +71,10 @@ const S = {
   base: ['auth.login', 'sync.pull', 'sync.push', 'notif.view', 'org.dept.view', 'hr.leave.view', 'hr.leave.request', 'doc.view', 'doc.upload', 'hr.att.view', 'prod.log.view'] as PermissionCode[],
   report: ['report.view', 'report.export'] as PermissionCode[],
   hrOwn: ['hr.shift.view', 'hr.form.view', 'hr.att.view', 'hr.leave.view', 'hr.leave.request'] as PermissionCode[],
-  woExecutor: ['maint.wo.view', 'maint.wo.execute', 'maint.wo.close', 'maint.asset.view', 'maint.condition.record', 'maint.permit.view', 'maint.permit.create', 'wh.req.create', 'wh.return', 'prod.downtime.create', 'hr.form.create'] as PermissionCode[],
+  woExecutor: ['maint.wo.view', 'maint.wo.execute', 'maint.wo.close', 'maint.asset.view', 'maint.condition.record', 'maint.permit.view', 'maint.permit.create', 'wh.req.create', 'wh.return', 'prod.downtime.create', 'hr.form.create', 'lab.sample.view'] as PermissionCode[],
   woApprover: ['maint.wo.view', 'maint.wo.create', 'maint.wo.assign', 'maint.wo.execute', 'maint.wo.close', 'maint.wo.cancel', 'maint.asset.view', 'maint.asset.manage', 'maint.condition.view', 'maint.condition.record', 'maint.pm.manage', 'maint.backlog.view', 'maint.downtime.verify', 'maint.permit.view', 'maint.permit.create', 'maint.permit.approve', 'wh.item.view', 'wh.req.create', 'wh.req.approve', 'wh.return', 'report.view', 'report.export', 'prod.log.view', 'prod.downtime.view', 'hr.att.view', 'hr.emp.view', 'hr.shift.view', 'hr.leave.approve', 'hr.form.view', 'doc.upload'] as PermissionCode[],
-  shiftLog: ['prod.log.view', 'prod.log.create', 'prod.log.update', 'prod.param.create', 'prod.param.view', 'prod.alarm.ack', 'prod.downtime.create', 'prod.downtime.view'] as PermissionCode[],
-  shiftLogHead: ['prod.log.view', 'prod.log.create', 'prod.log.update', 'prod.log.approve', 'prod.param.create', 'prod.param.view', 'prod.alarm.ack', 'prod.downtime.create', 'prod.downtime.view', 'maint.wo.view', 'maint.wo.create', 'lab.sample.create', 'fin.cost.view', 'report.view', 'report.export', 'doc.upload', 'hr.att.view', 'hr.shift.view', 'hr.leave.approve'] as PermissionCode[],
+  shiftLog: ['prod.log.view', 'prod.log.create', 'prod.log.update', 'prod.param.create', 'prod.param.view', 'prod.alarm.ack', 'prod.downtime.create', 'prod.downtime.view', 'lab.sample.view'] as PermissionCode[],
+  shiftLogHead: ['prod.log.view', 'prod.log.create', 'prod.log.update', 'prod.log.approve', 'prod.param.create', 'prod.param.view', 'prod.alarm.ack', 'prod.downtime.create', 'prod.downtime.view', 'maint.wo.view', 'maint.wo.create', 'lab.sample.create', 'lab.sample.view', 'lab.result.view', 'fin.cost.view', 'report.view', 'report.export', 'doc.upload', 'hr.att.view', 'hr.shift.view', 'hr.leave.approve'] as PermissionCode[],
   doc: ['doc.upload'] as PermissionCode[],
   /** حد أدنى للقراءة فقط: مزامنة سحب + إشعارات + عرض، بلا رفع ولا طلبات */
   baseReadOnly: ['auth.login', 'sync.pull', 'notif.view', 'org.dept.view', 'doc.view', 'hr.att.view', 'prod.log.view'] as PermissionCode[],
@@ -110,12 +110,16 @@ export interface SubDeptAccess {
 
 const uniq = (a: PermissionCode[]) => Array.from(new Set(a));
 
+/** قراءات المختبر — تُمنح لمن ينتج/يعتمد حالات OOS؛ تُطبَّق بياناتيًا: شعبة المختبر ترى عينات قسمها كله
+ *  لأن العينة مملوكة للشعبة المنتجة (انظر docs/05 §4.3 وقاعدة withinCeiling). */
+const LAB_READS = ['lab.sample.view', 'lab.result.view', 'lab.oos.view'] as PermissionCode[];
+
 export const ACCESS_MATRIX: SubDeptAccess[] = [
   {
     subDeptCode: 'PROD-UREA',
     purposeAr: 'تشغيل وحدة اليوريا (غرفة السيطرة/الحبيبات/التعبئة) وسجلوبات الوردية وجودة المنتج النهائية.',
     grants: [
-      { role: 'SECTION_HEAD', permissions: [...S.shiftLogHead, 'lab.result.enter', 'lab.report.export', 'lab.oos.manage', 'wh.item.view'] as PermissionCode[] },
+      { role: 'SECTION_HEAD', permissions: [...S.shiftLogHead, 'lab.result.enter', 'lab.report.export', 'lab.oos.manage', 'lab.oos.view', 'wh.item.view'] as PermissionCode[] },
       { role: 'SHIFT_SUPERVISOR', permissions: [...S.shiftLog, 'maint.wo.create', 'lab.sample.create', 'doc.upload'] },
       { role: 'CONTROL_ROOM_OPERATOR', permissions: [...S.shiftLog, 'maint.wo.create'] },
       { role: 'FIELD_TECHNICIAN', permissions: [...S.woExecutor, 'prod.param.create'] },
@@ -143,9 +147,9 @@ export const ACCESS_MATRIX: SubDeptAccess[] = [
     subDeptCode: 'PROD-LAB',
     purposeAr: 'تحاليل العمليات والمنتج (NH3/Urea/Sub-mic/Boiler/CW)، شهادات التحليل، ومطابقة المواصفات.',
     grants: [
-      { role: 'SECTION_HEAD', permissions: ['lab.sample.create', 'lab.result.enter', 'lab.result.verify', 'lab.report.export', 'lab.oos.manage', 'prod.param.view', 'prod.downtime.view', 'maint.wo.create', 'maint.wo.view', 'report.view', 'report.export', 'doc.upload', 'hr.att.view'] as PermissionCode[] },
-      { role: 'LAB_SUPERVISOR', permissions: ['lab.sample.create', 'lab.result.enter', 'lab.result.verify', 'lab.report.export', 'lab.oos.manage', 'prod.param.view', 'doc.upload'] as PermissionCode[] },
-      { role: 'LAB_ANALYST', permissions: ['lab.sample.create', 'lab.result.enter', 'lab.oos.manage', 'prod.param.view', 'doc.upload'] as PermissionCode[] },
+      { role: 'SECTION_HEAD', permissions: [...LAB_READS, 'lab.sample.create', 'lab.result.enter', 'lab.result.verify', 'lab.report.export', 'lab.oos.manage', 'prod.param.view', 'prod.downtime.view', 'maint.wo.create', 'maint.wo.view', 'report.view', 'report.export', 'doc.upload', 'hr.att.view'] as PermissionCode[] },
+      { role: 'LAB_SUPERVISOR', permissions: [...LAB_READS, 'lab.sample.create', 'lab.result.enter', 'lab.result.verify', 'lab.report.export', 'lab.oos.manage', 'prod.param.view', 'doc.upload'] as PermissionCode[] },
+      { role: 'LAB_ANALYST', permissions: [...LAB_READS, 'lab.sample.create', 'lab.result.enter', 'lab.oos.manage', 'prod.param.view', 'doc.upload'] as PermissionCode[] },
     ],
   },
   {
@@ -153,7 +157,7 @@ export const ACCESS_MATRIX: SubDeptAccess[] = [
     purposeAr: 'المعدات الحرارية: المبادل الحراري، المفكك (Stripper)، أوعية الضغط، الفلنجات، اختبار التسرب، مواد حرارية.',
     grants: [
       { role: 'SECTION_HEAD', permissions: S.woApprover },
-      { role: 'FIELD_TECHNICIAN', permissions: [...S.woExecutor, 'lab.sample.create', 'lab.result.enter'] },
+      { role: 'FIELD_TECHNICIAN', permissions: [...S.woExecutor, 'lab.sample.create', 'lab.result.enter', 'lab.result.view'] },
       { role: 'HSE_OFFICER', scope: 'DEPT', permissions: ['maint.permit.approve', 'maint.permit.view', 'maint.wo.view'] },
     ],
   },
@@ -240,7 +244,7 @@ export const GLOBAL_GRANTS: Record<string, { scope: DataScope; permissions: Perm
     scope: 'ALL',
     permissions: uniq([
       ...S.report, 'prod.log.approve', 'maint.wo.view', 'maint.wo.assign', 'maint.wo.close', 'maint.permit.approve',
-      'maint.backlog.view', 'maint.asset.view', 'lab.result.verify', 'fin.budget.view', 'fin.cost.view', 'fin.po.approve',
+      'maint.backlog.view', 'maint.asset.view', 'lab.result.verify', ...LAB_READS, 'fin.budget.view', 'fin.cost.view', 'fin.po.approve',
       'com.order.view', 'hr.leave.approve', 'hr.att.all', 'hr.shift.view', 'org.delegation.manage', 'audit.view', 'doc.manage', 'report.kpi.manage',
     ] as PermissionCode[]),
   },
@@ -251,12 +255,12 @@ export const GLOBAL_GRANTS: Record<string, { scope: DataScope; permissions: Perm
       'maint.backlog.view', 'maint.permit.approve', 'maint.downtime.verify', 'wh.req.approve', 'wh.issue', 'wh.grn', 'wh.stocktake',
       'wh.manage', 'hr.leave.approve', 'hr.shift.manage', 'hr.att.correct', 'hr.form.view', 'prod.downtime.view', 'prod.param.view',
       'com.order.confirm', 'fin.cost.view', 'fin.budget.view', 'report.view', 'report.export', 'doc.view', 'doc.upload',
-      'audit.view', 'auth.login', 'sync.pull', 'sync.push', 'notif.view', 'org.dept.view',
+      'audit.view', 'auth.login', 'sync.pull', 'sync.push', 'notif.view', 'org.dept.view', 'lab.sample.view', 'lab.result.view',
     ] as PermissionCode[]),
   },
   HSE_OFFICER: {
     scope: 'ALL',
-    permissions: uniq(['maint.permit.approve', 'maint.permit.view', 'maint.wo.view', 'prod.downtime.view', 'lab.oos.manage', 'report.view', 'doc.upload', 'auth.login', 'notif.view', 'sync.pull', 'sync.push']),
+    permissions: uniq(['maint.permit.approve', 'maint.permit.view', 'maint.wo.view', 'prod.downtime.view', 'lab.oos.manage', 'lab.oos.view', 'lab.result.view', 'report.view', 'doc.upload', 'auth.login', 'notif.view', 'sync.pull', 'sync.push']),
   },
   DOC_CONTROLLER: {
     scope: 'ALL',
@@ -268,7 +272,7 @@ export const GLOBAL_GRANTS: Record<string, { scope: DataScope; permissions: Perm
   },
   READONLY_GUEST: {
     scope: 'DEPT',
-    permissions: uniq(['report.view', 'prod.log.view', 'prod.param.view', 'maint.wo.view', 'maint.backlog.view', 'wh.item.view', 'com.order.view', 'fin.budget.view', 'auth.login', 'notif.view']),
+    permissions: uniq(['report.view', 'prod.log.view', 'prod.param.view', 'maint.wo.view', 'maint.backlog.view', 'wh.item.view', 'com.order.view', 'fin.budget.view', 'lab.sample.view', 'lab.result.view', 'auth.login', 'notif.view']),
   },
 };
 

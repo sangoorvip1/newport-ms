@@ -114,25 +114,71 @@ export const shiftLogDto = z.object({
 });
 export type ShiftLogDto = z.infer<typeof shiftLogDto>;
 
-/* ── Lab ──────────────────────────────────────────────────────────────── */
+/* ── المختبر: العينات، النتائج، التدقيق، حالات خارج المطابقة ─────────────
+ * العقود تُطابِق `packages/domain/src/lab.ts` (آلتا الحالة (العينة وOOS) مشتركتان بين الخادم والواجهات — انظر docs/05 §4).
+ * لا يُقبل من العميل ما يختمه الخادم: sampleNumber، isOutOfSpec، verifiedById/At، حالة العينة.
+ */
+export const labSampleCreateDto = z.object({
+  id: uuid.optional(),
+  /** رمز الوحدة كما في org/ProductionUnit: UREA | AMMONIA | COOLING_TOWER | UTILITY | LAB */
+  unitCode: z.string().min(2).max(24),
+  /** نوع العينة: PRODUCT | SUB_MICRON | PROCESS | BOILER_WATER | COOLING_WATER | STEAM | RAW */
+  sampleType: z.string().min(2).max(40),
+  pointTag: z.string().max(48).optional(),
+  collectedAt: isoDateTime,
+  /** الشعبة المالكة للعينة؛ إن غابت تُؤخذ من ملف المستخدم — لا تُترك للعميل ليوسّع نطاقه */
+  forSubDeptCode: z.string().regex(/^(PROD|MAINT|ADM)-[A-Z]{2,12}$/, 'رمز شعبة غير صالح').optional(),
+  workOrderId: uuid.optional(),
+  logId: uuid.optional(),
+  isFastTracked: z.boolean().default(false),
+  integrityJson: z
+    .object({
+      sealsOk: z.boolean().default(true),
+      temperatureC: z.number().min(-30).max(80).optional(),
+      holdTimeMin: z.number().int().min(0).max(2880).optional(),
+      transportedBy: z.string().max(80).optional(),
+      notes: z.string().max(400).optional(),
+    })
+    .optional(),
+});
+export type LabSampleCreateDto = z.infer<typeof labSampleCreateDto>;
+
+/** رقم عشري حتى 5 منازل (Decimal(14,5)) — يُقبل نصًا حفاظًا على الدقة من الهاتف */
+const decimalValue = z.union([z.number().finite(), z.string().regex(/^-?\d{1,9}(\.\d{1,5})?$/)]);
+
 export const labResultEntryDto = z.object({
-  sampleId: uuid,
-  parameters: z
+  results: z
     .array(
       z.object({
-        paramCode: z.string().min(1).max(40),
-        value: z.number(),
+        parameterCode: z.string().min(1).max(40),
+        value: decimalValue,
         unit: z.string().max(20).optional(),
-        method: z.string().max(60).optional(),
-        specMin: z.number().optional(),
-        specMax: z.number().optional(),
+        method: z.string().max(80).optional(),
+        remarks: z.string().max(600).optional(),
       }),
     )
     .min(1)
     .max(60),
-  remarks: z.string().max(2000).optional(),
+  noteAr: z.string().max(2000).optional(),
 });
 export type LabResultEntryDto = z.infer<typeof labResultEntryDto>;
+
+export const labVerifyDto = z.object({
+  decision: z.enum(['VERIFIED', 'REJECTED']),
+  remarks: z.string().min(3).max(600).optional(),
+});
+export type LabVerifyDto = z.infer<typeof labVerifyDto>;
+
+export const labOosUpdateDto = z
+  .object({
+    status: z.enum(['OPEN', 'INVESTIGATING', 'CAPA_DEFINED', 'EFFECTIVENESS_CHECK', 'CLOSED', 'REJECTED']).optional(),
+    rootCauseAr: z.string().min(3).max(4000).optional(),
+    capaAr: z.string().min(3).max(4000).optional(),
+    severity: z.enum(['MINOR', 'MAJOR', 'CRITICAL']).optional(),
+    noteAr: z.string().max(600).optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'لا تحديث فارغ' });
+export type LabOosUpdateDto = z.infer<typeof labOosUpdateDto>;
 
 /* ── Permits to work ──────────────────────────────────────────────────── */
 export const permitCreateDto = z.object({

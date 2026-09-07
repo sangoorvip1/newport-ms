@@ -35,6 +35,13 @@ export interface PermissionDef {
   offlineCapable?: boolean;
 }
 
+/**
+ * يُشتق `module` من الجزء الأول و`action` من الجزء الثاني من الرمز.
+ * انتبه: في الرموز ثلاثية الأجزاء (<module>.<entity>.<action>) يحمل حقل `action` اسم الكيان
+ * (مثل lab.sample.view ⇒ action='sample')، وهو ما يُزرع في عمود permissions.action وما تعتمد عليه
+ * واجهة الفلترة. تُركت الدلالة كما هي عمدًا لأن تغييرها يعني إعادة تفسير بيانات مزروعة ومصفوفة منشورة؛
+ * الاعتماد في التفويض يتم على `code` كاملًا لا على `action`.
+ */
 const def = (
   code: string,
   nameAr: string,
@@ -75,6 +82,14 @@ export const PERMISSION_DEFS = [
   def('prod.utility.manage', 'إدارة تشغيل أبراج التبريد (خلايا/مرواح/كيمائيات)', 'Manage cooling tower operation', 'SUBDEPT', true),
 
   // ── المختبر ─────────────────────────────────────────────────────────────
+  // رموز القراءة مستقلة عمدًا: من يحق له إدخال نتيجة لا يحق له بالضرورة قراءة كل نتائج القسم،
+  // وكانت الوحدة قبل ذلك تُقرأ بصلاحيات الكتابة فقط (انظر docs/05 §12).
+  // سقف القراءة = ALL عمدًا: بيانات ضبط الجودة التشغيلية ليست سرية، والمدير/السلامة/المدقق يحتاجونها
+  // عبر الخط؛ السيطرة الفعلية على الإدخال والتدقيق (وهما SUBDEPT/ALL). اختبار المصفوفة يرفض أي منح
+  // أوسع من السقف، فوضع رمز سقفه DEPT في سطر PLANT_MANAGER (نطاقه ALL) يفشل البناء — وهذا هو الضمان.
+  def('lab.sample.view', 'عرض العينات وطلبات التحليل', 'View samples & test requests', 'ALL'),
+  def('lab.result.view', 'عرض نتائج التحاليل ومطابقتها للمواصفة', 'View results against specification', 'ALL'),
+  def('lab.oos.view', 'متابعة حالات خارج المطابقة (OOS/CAPA)', 'View OOS/CAPA cases', 'ALL'),
   def('lab.sample.create', 'فتح طلب تحليل / سحب عينة', 'Create sample request', 'SUBDEPT', true),
   def('lab.result.enter', 'إدخال نتائج التحاليل', 'Enter lab results', 'SUBDEPT', true),
   def('lab.result.verify', 'تدقيق/اعتماد نتائج التحليل', 'Verify lab results', 'ALL'),
@@ -167,6 +182,7 @@ export type PermissionCode =
   | 'auth.login' | 'sync.pull' | 'sync.push' | 'notif.view'
   | 'prod.log.view' | 'prod.log.create' | 'prod.log.update' | 'prod.log.approve' | 'prod.param.create' | 'prod.param.view'
   | 'prod.alarm.ack' | 'prod.downtime.create' | 'prod.downtime.view' | 'prod.utility.manage'
+  | 'lab.sample.view' | 'lab.result.view' | 'lab.oos.view'
   | 'lab.sample.create' | 'lab.result.enter' | 'lab.result.verify' | 'lab.report.export' | 'lab.oos.manage'
   | 'maint.asset.view' | 'maint.asset.manage' | 'maint.wo.view' | 'maint.wo.create' | 'maint.wo.assign' | 'maint.wo.execute'
   | 'maint.wo.close' | 'maint.wo.cancel' | 'maint.pm.manage' | 'maint.condition.record' | 'maint.condition.view'
