@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-07T08:18:45.595Z",
+  "generatedAt": "2026-09-07T08:41:18.115Z",
   "schemaVersion": 1,
   "notesAr": "ملف مُولَّد آليًا من @newport/domain — لا يُحرَّر يدويًا. أي تعديل على الصلاحيات يتم في packages/domain/src/roles.ts ثم يُعاد التوليد.",
   "grants": [
@@ -986,7 +986,7 @@
       "departmentCode": "ADMIN",
       "subDepartmentCode": "ADM-COM",
       "subDepartmentNameAr": "الشعبة التجارية",
-      "purposeAr": "الشعبة التجارية: أوامر البيع/التحميل،与客户/وكلاء التوزيع، الكميات المسلّمة، الأسعار والعقود.",
+      "purposeAr": "الشعبة التجارية: أوامر البيع/التحميل، العملاء ووكلاء التوزيع، الكميات المسلّمة، الأسعار والعقود.",
       "grants": [
         {
           "role": "SECTION_HEAD",

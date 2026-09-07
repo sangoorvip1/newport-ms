@@ -209,7 +209,7 @@ export const ACCESS_MATRIX: SubDeptAccess[] = [
   },
   {
     subDeptCode: 'ADM-COM',
-    purposeAr: 'الشعبة التجارية: أوامر البيع/التحميل،与客户/وكلاء التوزيع، الكميات المسلّمة، الأسعار والعقود.',
+    purposeAr: 'الشعبة التجارية: أوامر البيع/التحميل، العملاء ووكلاء التوزيع، الكميات المسلّمة، الأسعار والعقود.',
     grants: [
       { role: 'SECTION_HEAD', permissions: ['com.order.view', 'com.order.create', 'com.order.confirm', 'com.customer.manage', 'com.pricing.manage', 'com.report.export', 'fin.coa.view', 'fin.cost.view', 'fin.invoice.manage', 'report.view', 'report.export', 'doc.upload', 'doc.manage', 'hr.att.view', 'maint.wo.create', 'prod.downtime.view'] as PermissionCode[] },
       { role: 'COMMERCIAL_OFFICER', scope: 'DEPT', permissions: ['com.order.view', 'com.order.create', 'com.order.confirm', 'com.customer.manage', 'com.report.export', 'report.view', 'doc.upload', 'prod.log.view'] as PermissionCode[] },

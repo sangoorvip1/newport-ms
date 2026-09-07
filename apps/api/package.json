@@ -17,7 +17,7 @@
     "seed": "tsx prisma/seed.ts",
     "studio": "prisma studio",
     "docs:schema": "node scripts/gen-schema-docs.mjs",
-    "docs:all": "npm run matrix --prefix ../../packages/domain && npm run ddl && npm run docs:schema",
+    "docs:all": "npm run matrix --prefix ../../packages/domain && npm run docs:features --prefix ../../packages/domain && npm run ddl && npm run docs:schema",
     "e2e": "node scripts/e2e-smoke.mjs",
     "e2e:debug": "E2E_DEBUG=1 node scripts/e2e-smoke.mjs"
   },
