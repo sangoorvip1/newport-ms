@@ -56,7 +56,7 @@ RBAC/ABAC: أدوار، منح شعبة×دور، أجهزة، جلسات
 |---|---|---|---|---|
 | `CalibrationRecord` | `calibration_records` | 10 | 0 | 1 |
 | `LabParameter` | `lab_parameters` | 10 | 0 | 0 |
-| `LabSample` | `lab_samples` | 20 | 0 | 1 |
+| `LabSample` | `lab_samples` | 21 | 0 | 1 |
 | `LabResult` | `lab_results` | 16 | 1 | 1 |
 ### الحضور والبصمة
 
@@ -130,7 +130,7 @@ Change Feed، منع التكرار، التعارضات، سجل التدقيق
 | `ProductionAlarm` | `production_alarms` | 12 | 0 | 1 |
 | `EquipmentDowntime` | `equipment_downtimes` | 17 | 0 | 2 |
 | `LabSpec` | `lab_specs` | 8 | 1 | 0 |
-| `LabOosCase` | `lab_oos_cases` | 11 | 0 | 1 |
+| `LabOosCase` | `lab_oos_cases` | 12 | 0 | 2 |
 | `WoLog` | `wo_logs` | 10 | 0 | 1 |
 | `WoLaborEntry` | `wo_labor_entries` | 9 | 0 | 2 |
 | `PartRequisition` | `part_requisitions` | 14 | 0 | 1 |
@@ -807,6 +807,7 @@ Change Feed، منع التكرار، التعارضات، سجل التدقيق
   subDept SubDepartment       @relation(fields: [subDeptId], references: [id])
   log     ProductionShiftLog? @relation(fields: [logId], references: [id])
   results LabResult[]
+  oosCases LabOosCase[]
 @@index([subDeptId, status, collectedAt])
 ```
 
@@ -847,7 +848,9 @@ Change Feed، منع التكرار، التعارضات، سجل التدقيق
   openedById  String    @db.Uuid
   closedAt    DateTime?
   createdAt   DateTime  @default(now())
+  sample LabSample @relation(fields: [sampleId], references: [id], onDelete: Cascade)
 @@index([status, severity])
+@@index([sampleId])
 ```
 
 #### `WorkOrder` → جدول `work_orders`

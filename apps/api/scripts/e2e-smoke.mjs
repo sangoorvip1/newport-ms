@@ -25,6 +25,20 @@ let refreshToken = null;
 /** كلمة المرور الصالحة حاليًا (تتغير إذا بدأ السيناريو بحساب بكلمة مرور افتراضية) */
 let pw = PASSWORD;
 
+// الأرقام المرجعية تُستورد من @newport/domain — حتى لا يتقادم هذا الملف عند إضافة صلاحية/منح
+let EXPECT = { permissions: 91, roles: 21, grants: 36 };
+try {
+  const domain = await import('@newport/domain');
+  EXPECT = {
+    permissions: domain.PERMISSION_DEFS.length,
+    roles: domain.ROLE_DEFS.length,
+    // المسار يعيد منح (شعبة × دور) فقط؛ الأدوار العابرة للأقسام لها مسار/عدّاد منفصل
+    grants: domain.resolveGrants().filter((g) => g.subDeptCode !== null).length,
+  };
+} catch {
+  console.log('· @newport/domain غير متاح — سيُستعمل الافتراضي في الفحوص أدناه');
+}
+
 const results = [];
 function check(name, cond, detail = '') {
   results.push({ name, ok: !!cond, detail });
@@ -79,7 +93,7 @@ async function resetSeedAccounts() {
     `UPDATE users SET "passwordHash" = $1, "mustChangePwd" = true, "failedAttempts" = 0, "lockedUntil" = NULL,
             version = version + 1, "syncCursor" = 0
       WHERE username = ANY($2)`,
-    [hash, [USER, 'heat.head', 'heat.tech']],
+    [hash, [USER, 'heat.head', 'heat.tech', 'urea.head', 'lab.analyst', 'lab.head']],
   );
   await c.end();
   console.log(`↺ أُعيد ضبط ${r.rowCount} حساب إلى الحالة المزروعة (كلمة مرور افتراضية + قيد التغيير)`);
@@ -164,9 +178,9 @@ async function main() {
   check('GET /v1/org/drift — لا انحراف عن المرجع', ok(drift.status) && drift.body?.isAligned === true, JSON.stringify(drift.body));
   const matrix = await call('GET', '/v1/org/permissions-matrix');
   const matrixRows = Array.isArray(matrix.body) ? matrix.body : (matrix.body?.rows ?? []);
-  check('GET /v1/org/permissions-matrix → 36 منح شعبة×دور', ok(matrix.status) && matrixRows.length === 36, `rows=${matrixRows.length}`);
+  check(`GET /v1/org/permissions-matrix → ${EXPECT.grants} منح شعبة×دور`, ok(matrix.status) && matrixRows.length === EXPECT.grants, `rows=${matrixRows.length}`);
   const verify = await call('GET', '/v1/org/permissions-verify');
-  check('GET /v1/org/permissions-verify — القاعدة تطابق التعاقد', ok(verify.status) && verify.body?.inSync === true && verify.body?.roles === 21 && verify.body?.permissions === 91, JSON.stringify(verify.body));
+  check('GET /v1/org/permissions-verify — القاعدة تطابق التعاقد', ok(verify.status) && verify.body?.inSync === true && verify.body?.roles === EXPECT.roles && verify.body?.permissions === EXPECT.permissions, JSON.stringify(verify.body));
 
   // 4) أمر عمل: إنشاء → تقديم → منع انتقال غير قانوني.
   //    يُنفَّذ بحساب رئيس شعبة المعدات الحرارية (SYS_ADMIN لا يملك maint.wo.create عمدًا: فصل المهام)
@@ -267,10 +281,13 @@ async function main() {
   const after = await call2('GET', `/v1/maintenance/work-orders/${woId}`);
   check('ملاحظة الميدان وصلت ولم تُستبدل الحالة', String(after.body?.description ?? '').includes('ملاحظة ميدانية') && after.body?.status === 'SUBMITTED', `status=${after.body?.status}`);
 
-  const pull = await callM('GET', `/v1/sync/pull?deviceId=${DEVICE}&sinceCursor=0&limit=50`);
+  // الكيان محصور في الفحص: مع نمو نشاط المختبر تتجاوز صفحة 50 صفاً رقمَ أمر العمل، فالفحص
+  // بلا فلترة يصبح هشًا بلا معنى. الترتيب التسلسلي يُفحص صراحةً هذه المرة.
+  const pull = await callM('GET', `/v1/sync/pull?deviceId=${DEVICE}&sinceCursor=0&limit=200&entities=workOrder`);
   const changes = pull.body?.changes ?? [];
   check('GET /v1/sync/pull يعيد Change Feed', ok(pull.status) && changes.length > 0, `rows=${changes.length}, cursor=${pull.body?.cursor}`);
-  check('feed يتضمن أمر العمل بترتيب تسلسلي', changes.some((c) => c.entity === 'workOrder' && c.recordId === woId), '');
+  const ascending = changes.every((c, i) => i === 0 || c.seq > changes[i - 1].seq);
+  check('feed يتضمن أمر العمل بترتيب تسلسلي متزايد', changes.some((c) => c.entity === 'workOrder' && c.recordId === woId) && ascending, `rows=${changes.length}`);
   const proto = await callM('GET', '/v1/sync/protocol');
   check('GET /v1/sync/protocol يعرض 19 كيانًا', ok(proto.status) && (proto.body?.entities?.length ?? 0) === 19, `entities=${proto.body?.entities?.length}`);
   const plan = await callM('POST', '/v1/sync/batch-plan', { ops: [{ opId: 'p1', entity: 'workOrder', recordId: woId, kind: 'UPSERT', clientTimestamp: new Date().toISOString() }] });
@@ -279,6 +296,127 @@ async function main() {
   check('GET /v1/audit يعمل للسيناريو', ok(audit.status), `status=${audit.status}`);
 
   // 6) سجل التدقيق غير قابل للتعديل (يُتحقق على مستوى القاعدة مباشرة إن توفرت DATABASE_URL)
+  // 7) المختبر: عينة من شعبة إنتاج → إدخال نتائج (تجاوز مواصفة) → تدقيق → OOS/CAPA → شهادة
+  const labAnalystLogin = await loginWithFallback('lab.analyst', [PASSWORD, NEW_PASSWORD], 'ANDROID');
+  check('دخول محلل المختبر', !!labAnalystLogin, labAnalystLogin ? `pw=${labAnalystLogin.password}` : 'فشل');
+  if (labAnalystLogin?.mustChangePwd === true) {
+    const saved = accessToken;
+    accessToken = labAnalystLogin.accessToken;
+    const cp = await call('POST', '/v1/auth/change-password', { currentPassword: labAnalystLogin.password, newPassword: NEW_PASSWORD });
+    check('محلل المختبر يغيّر كلمته (مسار مسموح في الجلسة المقيدة)', ok(cp.status), JSON.stringify(cp.body).slice(0, 160));
+    const again = await loginWithFallback('lab.analyst', [NEW_PASSWORD], 'ANDROID');
+    accessToken = again?.accessToken ?? saved;
+  }
+  let labToken = labAnalystLogin?.accessToken ?? accessToken;
+  const analystSession = labAnalystLogin?.mustChangePwd === true ? await loginWithFallback('lab.analyst', [NEW_PASSWORD], 'ANDROID') : labAnalystLogin;
+  labToken = analystSession?.accessToken ?? labToken;
+
+  const urea = await loginWithFallback('urea.head', [PASSWORD, NEW_PASSWORD], 'WIN');
+  let ureaToken = urea?.accessToken ?? null;
+  if (urea?.mustChangePwd === true) {
+    const t = accessToken;
+    accessToken = urea.accessToken;
+    await call('POST', '/v1/auth/change-password', { currentPassword: urea.password, newPassword: NEW_PASSWORD });
+    const again = await loginWithFallback('urea.head', [NEW_PASSWORD], 'WIN');
+    ureaToken = again?.accessToken ?? ureaToken;
+    accessToken = t;
+  }
+
+  const catalog = await call('GET', '/v1/lab/parameters?unitCode=UREA', undefined, { token: ureaToken });
+  const catalogCodes = (catalog.body?.items ?? []).map((x) => x.code);
+  check('GET /v1/lab/parameters — دليل المُعامِلات ومواصفاته', ok(catalog.status) && catalogCodes.includes('UREA_N'), `codes=${catalogCodes.slice(0, 4).join(',')}`);
+
+  // العينة تفتحها الشعبة المنتِجة (نطاق SUBDEPT على شعبتها) — رقم من تسلسل القاعدة
+  const sample = await call(
+    'POST',
+    '/v1/lab/samples',
+    { unitCode: 'UREA', sampleType: 'PRODUCT', pointTag: 'GRN-01', collectedAt: new Date().toISOString(), isFastTracked: false, integrityJson: { sealsOk: true } },
+    { token: ureaToken },
+  );
+  const sampleId = sample.body?.id;
+  check('POST /v1/lab/samples — رئيس شعبة الإنتاج يفتح عينة', ok(sample.status) && /^SMP-\d{4}-\d{6}$/.test(String(sample.body?.sampleNumber)), `status=${sample.status} ${sample.body?.sampleNumber ?? JSON.stringify(sample.body).slice(0, 160)}`);
+
+  // قاعدة النطاق: رئيس المختبر (SUBDEPT) لا يفتح عينة باسم شعبة أخرى
+  const labHead0 = await loginWithFallback('lab.head', [PASSWORD, NEW_PASSWORD], 'WEB');
+  let labHeadToken = labHead0?.accessToken ?? null;
+  if (labHead0?.mustChangePwd === true) {
+    const t = accessToken;
+    accessToken = labHead0.accessToken;
+    await call('POST', '/v1/auth/change-password', { currentPassword: labHead0.password, newPassword: NEW_PASSWORD });
+    const again = await loginWithFallback('lab.head', [NEW_PASSWORD], 'WEB');
+    labHeadToken = again?.accessToken ?? labHeadToken;
+    accessToken = t;
+  }
+  const foreignSample = await call(
+    'POST',
+    '/v1/lab/samples',
+    { unitCode: 'UREA', sampleType: 'PRODUCT', collectedAt: new Date().toISOString(), forSubDeptCode: 'PROD-UREA' },
+    { token: labHeadToken },
+  );
+  check('المختبر لا يفتح عينة باسم شعبة أخرى (403 + سبب عربي)', foreignSample.status === 403 && !!foreignSample.body?.messageAr, `status=${foreignSample.status} ${foreignSample.body?.messageAr ?? ''}`);
+
+  // إدخال النتائج: المطابقة تُحسب في الخادم، والتجاوز يولّد حالة OOS تلقائيًا
+  const entry = await call(
+    'POST',
+    `/v1/lab/samples/${sampleId}/results`,
+    { results: [{ parameterCode: 'UREA_N', value: '46.20000' }, { parameterCode: 'UREA_BIURET', value: '1.80000', remarks: 'عينة إعادة' }] },
+    { token: labToken },
+  );
+  const entryOk = ok(entry.status) && entry.body?.status === 'RESULTED' && entry.body?.written?.length === 2;
+  check('POST /v1/lab/samples/:id/results — حساب المطابقة في الخادم', entryOk, `status=${entry.status} ${JSON.stringify(entry.body).slice(0, 200)}`);
+  check('تجاوز المواصفة يولّد حالة OOS تلقائيًا', (entry.body?.oosCreated ?? []).length === 1 && entry.body.oosCreated[0].parameterCode === 'UREA_BIURET', JSON.stringify(entry.body?.oosCreated ?? []));
+  const oosId = (entry.body?.oosCreated ?? [])[0]?.code;
+
+  // إعادة الإدخال بعد الاعتماد مرفوض — والآلة في domain لا في العميل
+  const detail1 = await call('GET', `/v1/lab/samples/${sampleId}`, undefined, { token: labToken });
+  const resultIds = (detail1.body?.results ?? []).map((r) => r.id);
+  check('تفاصيل العينة تعرض الصفوف مع المواصفة والحالة', ok(detail1.status) && resultIds.length === 2 && detail1.body.results[0].spec !== undefined, `status=${detail1.status}`);
+
+  // المحلل لا يعتمد نتائج نفسه: لا lab.result.verify لهذا الدور
+  const analystVerify = await call('POST', `/v1/lab/results/${resultIds[0]}/verify`, { decision: 'VERIFIED' }, { token: labToken });
+  check('محلل المختبر لا يدقّق النتائج (403)', analystVerify.status === 403, `status=${analystVerify.status} ${analystVerify.body?.messageAr ?? ''}`);
+
+  const v1 = await call('POST', `/v1/lab/results/${resultIds[0]}/verify`, { decision: 'VERIFIED' }, { token: labHeadToken });
+  check('تدقيق نتيجة واحدة يبقي العينة RESULTED', ok(v1.status) && v1.body?.sampleStatus === 'RESULTED' && v1.body?.remainingUnverified === 1, JSON.stringify(v1.body).slice(0, 200));
+  const v2 = await call('POST', `/v1/lab/results/${resultIds[1]}/verify`, { decision: 'VERIFIED' }, { token: labHeadToken });
+  check('تدقيق آخر نتيجة ينقل العينة إلى VERIFIED', ok(v2.status) && v2.body?.sampleStatus === 'VERIFIED' && v2.body?.certificateReady === true, JSON.stringify(v2.body).slice(0, 200));
+
+  const reEnter = await call('POST', `/v1/lab/samples/${sampleId}/results`, { results: [{ parameterCode: 'UREA_N', value: '46.00000' }] }, { token: labToken });
+  check('إدخال نتائج على عينة معتمدة ⇒ 409 (لا مسار خلفيًا)', reEnter.status === 409 && !!reEnter.body?.messageAr, `status=${reEnter.status} ${reEnter.body?.messageAr ?? ''}`);
+
+  // الشهادة محجوبة ما دامت حالة OOS مفتوحة
+  const certBlocked = await call('GET', `/v1/lab/certificates/${sampleId}`, undefined, { token: labHeadToken });
+  check('الشهادة لا تُصدر مع حالة OOS مفتوحة (409)', certBlocked.status === 409 && String(certBlocked.body?.messageAr).includes('خارج المطابقة'), `status=${certBlocked.status} ${certBlocked.body?.messageAr ?? ''}`);
+
+  const oosList = await call('GET', '/v1/lab/oos?status=OPEN', undefined, { token: labHeadToken });
+  const oosRow = (oosList.body?.items ?? [])[0];
+  check('GET /v1/lab/oos يعرض الحالة المفتوحة بمسار الانتقال التالي', ok(oosList.status) && oosRow?.nextStatuses?.includes('INVESTIGATING'), `total=${oosList.body?.total} code=${oosRow?.code}`);
+
+  // إغلاق CAPA: الآلة ترفض القفز، والإغلاق يستلئ سببًا جذريًا ونص CAPA
+  const badJump = await call('POST', `/v1/lab/oos/${oosRow?.id}`, { status: 'CLOSED' }, { token: labHeadToken });
+  check('قفزة OPEN→CLOSED مرفوضة (409 + القائمة المسموحة)', badJump.status === 409 && Array.isArray(badJump.body?.allowedNext), `status=${badJump.status} ${JSON.stringify(badJump.body).slice(0, 160)}`);
+  const inv = await call('POST', `/v1/lab/oos/${oosRow?.id}`, { status: 'INVESTIGATING', rootCauseAr: 'ارتفاع حمل وحدة البلورة' }, { token: labHeadToken });
+  check('OPEN → INVESTIGATING', ok(inv.status) && inv.body?.status === 'INVESTIGATING', JSON.stringify(inv.body).slice(0, 140));
+  const capaNoText = await call('POST', `/v1/lab/oos/${oosRow?.id}`, { status: 'CAPA_DEFINED' }, { token: labHeadToken });
+  check('CAPA_DEFINED بلا نص إجراء ⇒ 400', capaNoText.status === 400 && !!capaNoText.body?.messageAr, `status=${capaNoText.status}`);
+  await call('POST', `/v1/lab/oos/${oosRow?.id}`, { status: 'CAPA_DEFINED', capaAr: 'ضبط معدل التغذية وتنظيف المبادل' }, { token: labHeadToken });
+  await call('POST', `/v1/lab/oos/${oosRow?.id}`, { status: 'EFFECTIVENESS_CHECK' }, { token: labHeadToken });
+  const closed = await call('POST', `/v1/lab/oos/${oosRow?.id}`, { status: 'CLOSED' }, { token: labHeadToken });
+  check('الإغلاق بعد السبب الجذري والإجراء التصحيحي', ok(closed.status) && closed.body?.status === 'CLOSED' && !!closed.body?.closedAt, `status=${closed.status} ${JSON.stringify(closed.body).slice(0, 140)}`);
+
+  const cert = await call('GET', `/v1/lab/certificates/${sampleId}`, undefined, { token: labHeadToken });
+  const certRows = cert.body?.rows ?? [];
+  check(
+    'GET /v1/lab/certificates/:sampleId — شهادة بالنتائج المدققة فقط',
+    ok(cert.status) && certRows.length === 2 && certRows.some((r) => r.verdict === 'FAIL') && !!cert.body?.signature?.issuedAt,
+    `status=${cert.status} rows=${certRows.length} ${cert.body?.sampleNumber ?? ''}`,
+  );
+  check('الشهادة لا تُسرّب أسماء مستخدمين بصلاحيات غير مطلوبة (توقيع فقط)', Array.isArray(cert.body?.signature?.verifiedBy) && !!cert.body?.titleAr);
+
+  const labStats = await call('GET', '/v1/lab/stats', undefined, { token: labHeadToken });
+  check('GET /v1/lab/stats — مؤشرات الدورة والمطابقة', ok(labStats.status) && typeof labStats.body?.openOosCases === 'number' && labStats.body?.samples?.total >= 1, JSON.stringify(labStats.body));
+  void oosId;
+
   if (process.env.DATABASE_URL) {
     const { default: pg } = await import('pg');
     const c = new pg.Client(process.env.DATABASE_URL);

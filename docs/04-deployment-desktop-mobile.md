@@ -146,7 +146,7 @@ curl -s https://ops.newport.local/api/health/ready
 ```json
 {"status":"ready","facility":"BFC-L1","checks":{"database":"ok",
  "organization":"3 dept / 13 sub-dept (reference: 3/13)",
- "rbac":"21/21 roles, 91/91 permissions","openConflicts":"0"}}
+ "rbac":"21/21 roles, 94/94 permissions","openConflicts":"0"}}
 ```
 ثم:
 - `GET /api/v1/org/drift` → `"isAligned":true` (الهيكل لا يزيد ولا ينقص عن المرجع).

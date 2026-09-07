@@ -766,6 +766,7 @@ model LabSample {
   subDept SubDepartment       @relation(fields: [subDeptId], references: [id])
   log     ProductionShiftLog? @relation(fields: [logId], references: [id])
   results LabResult[]
+  oosCases LabOosCase[]
 
   @@index([subDeptId, status, collectedAt])
   @@map("lab_samples")
@@ -818,7 +819,10 @@ model LabOosCase {
   closedAt    DateTime?
   createdAt   DateTime  @default(now())
 
+  sample LabSample @relation(fields: [sampleId], references: [id], onDelete: Cascade)
+
   @@index([status, severity])
+  @@index([sampleId])
   @@map("lab_oos_cases")
 }
 

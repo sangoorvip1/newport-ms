@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { CertificateResultRow } from '../src/lab.js';
 import {
   allowedOosNext,
   buildCertificateRows,
@@ -104,7 +105,7 @@ describe('lab: certificate (CoA) assembly', () => {
   const specs = [{ parameterId: 'p1', minVal: 46, maxVal: 46.4 }];
 
   it('يستبعد النتائج غير المعتمدة افتراضيًا ويُدرجها عند الطلب الصريح', () => {
-    const rows = [
+    const rows: CertificateResultRow[] = [
       { value: 46.2, parameterId: 'p1', parameter, verifiedAt: '2026-09-01T08:00:00.000Z' },
       { value: 45.1, parameterId: 'p2', parameter: { ...parameter, code: 'UREA_BI' }, verifiedAt: null },
     ];
@@ -113,14 +114,14 @@ describe('lab: certificate (CoA) assembly', () => {
   });
 
   it('الحكم في الشهادة = مواصفة + علامة الخرق المخزنة (لا يُعاد اختراع القرار)', () => {
-    const rows = [{ value: 46.2, parameterId: 'p1', parameter, verifiedAt: new Date('2026-09-01') }];
+    const rows: CertificateResultRow[] = [{ value: 46.2, parameterId: 'p1', parameter, verifiedAt: new Date('2026-09-01') }];
     expect(buildCertificateRows(rows, specs)[0]).toMatchObject({ verdict: 'PASS', minVal: 46, maxVal: 46.4 });
-    expect(buildCertificateRows([{ ...rows[0], isOutOfSpec: true }], specs)[0].verdict).toBe('FAIL');
+    expect(buildCertificateRows([{ ...rows[0]!, isOutOfSpec: true }], specs)[0]!.verdict).toBe('FAIL');
   });
 
   it('القيمة العشرية تُصدَّر نصًا كما أُدخلت (لا فقدان دقة في الطباعة)', () => {
-    const rows = [{ value: '46.20000', parameterId: 'p1', parameter, verifiedAt: new Date('2026-09-01') }];
-    expect(buildCertificateRows(rows, specs)[0].value).toBe('46.20000');
+    const rows: CertificateResultRow[] = [{ value: '46.20000', parameterId: 'p1', parameter, verifiedAt: new Date('2026-09-01') }];
+    expect(buildCertificateRows(rows, specs)[0]!.value).toBe('46.20000');
   });
 
   it('الشهادة لا تُصدر قبل الاعتماد، ولا مع حالة OOS مفتوحة', () => {
@@ -134,7 +135,7 @@ describe('lab: certificate (CoA) assembly', () => {
 });
 
 describe('lab: permissions contract (الضمان الذي كشف منحًا أوسع من السقف)', () => {
-  const READ_OF: Record<string, PermissionCode> = {
+  const READ_OF: Record<string, PermissionCode> = { // قاعدة «لا كتابة بلا قرأته» — مفاتيحها رموز كتابة مخبرية
     'lab.sample.create': 'lab.sample.view',
     'lab.result.enter': 'lab.result.view',
     'lab.result.verify': 'lab.result.view',
@@ -146,7 +147,7 @@ describe('lab: permissions contract (الضمان الذي كشف منحًا أ�
     for (const g of resolveGrants()) {
       const set = new Set(g.permissions);
       for (const [write, read] of Object.entries(READ_OF)) {
-        if (set.has(write) && !set.has(read)) offenders.push(`${g.subDeptCode ?? '(global)'}/${g.role}: ${write} بلا ${read}`);
+        if (set.has(write as PermissionCode) && !set.has(read)) offenders.push(`${g.subDeptCode ?? '(global)'}/${g.role}: ${write} بلا ${read}`);
       }
     }
     expect(offenders).toEqual([]);
@@ -160,8 +161,9 @@ describe('lab: permissions contract (الضمان الذي كشف منحًا أ�
       expect(def.code.split('.').at(-1)).toBe('view'); // الدلالة المعتمدة للتفويض: الرمز الكامل (انظر ملاحظة def)
       expect(withinCeiling(def.maxScope, code)).toBe(true);
     }
-    const used = new Set(resolveGrants().flatMap((g) => g.permissions));
-    for (const code of Object.keys(READ_OF).concat(Object.values(READ_OF)) as PermissionCode[]) expect(used.has(code), code).toBe(true);
+    const used = new Set<string>(resolveGrants().flatMap((g) => g.permissions));
+    const labCodes: PermissionCode[] = [...Object.keys(READ_OF), ...Object.values(READ_OF)] as PermissionCode[];
+    for (const code of labCodes) expect(used.has(code), code).toBe(true);
   });
 
   it('لا شعبة تملك lab.result.verify إلا المختبر ومدير المعمل (الاعتماد مركزية مقصودة)', () => {

@@ -140,7 +140,7 @@ BiometricDevice (ZKTeco) ──import──► attendance_punches (@@unique(devi
 | مؤجّلات | 45 | `trg_sync` ×19 (كتابة `sync_change_log` + ختم `syncSeq`)، `trg_bump_version` ×14 (زيادة `version`)، `trg_touch` ×10 (`updatedAt` فقط)، `trg_stamp_entity_seq` ×1، `trg_audit_immutable` ×1 |
 | عرض/ماديات | 4 views | `mv_maintenance_kpi_daily` (MTTR/MTBF/انصياع الصيانة)، `mv_production_daily`، `mv_attendance_daily`، `mv_stock_critical` + فهارس `ux_mv_*` الفريدة (تسمح بـ `REFRESH … CONCURRENTLY`) |
 | RLS | 4 policies | `p_wo_scope`، `p_slog_scope`، `p_punch_scope`، `p_je_finance` — كلها مع `FORCE ROW LEVEL SECURITY` (حتى المالك مقيَّد) |
-| قيود CHECK | 23 | تنسيق الرموز والأرقام وحقلية المنطق (مثل `code ~ '^MAINT-[A-Z]+$'`، `actualEndAt >= actualStartAt`) |
+| قيود CHECK | 23 (+3 في ترحيل المختبر = 26) | تنسيق الرموز والأرقام وحقلية المنطق (مثل `code ~ '^MAINT-[A-Z]+$'`، `actualEndAt >= actualStartAt`) |
 
 **المؤجّلات مشتقّة من `sync_entity_registry` لا من قائمة مكتوبة باليد:** الترحيل يُنشئ الجدول
 `sync_entity_registry(entity, table_name, merge, push_priority)` ويزرعه 19 صفًا، ثم تُبنى منه
@@ -164,6 +164,12 @@ BiometricDevice (ZKTeco) ──import──► attendance_punches (@@unique(devi
 > (قيمة التسلسل تُعرف بعد الإدراج)، لذا وُجد `trg_stamp_entity_seq` — مؤجّل `AFTER INSERT ON sync_change_log`
 > يربط `payload.syncSeq` عبر `sync_entity_registry` مع `EXCEPTION WHEN undefined_table OR undefined_column THEN RETURN NULL`
 > حتى لا ينكهر الترحيل عند إضافة جدول جديد.
+
+**ترحيل لاحق `20260907000002_lab_oos_integrity`:** كان `lab_oos_cases` يحمل `sampleId`/`resultId`
+كأعمدة بلا مفاتيح أجنبية، فأي سطر يتيم يبقى في قائمة المتابعة للأبد ولا يمكن الربط عبر Prisma. أُضيف:
+`fk_lab_oos_sample` (CASCADE مع حذف العينة)، `fk_lab_oos_result` (SET NULL)، `ix_oos_sample`، `ix_oos_open_by`،
+وقيود `ck_oos_status` و`ck_oos_severity` و`ck_oos_close_requires_docs` (لا إغلاق بلا سبب جذري ونص CAPA) —
+نفس آلة الحالة في `packages/domain/src/lab.ts`، مكرّرة في القاعدة عمدًا لأن استيراد DBA لا يمر بالخدمة.
 
 **أرقام المستندات:** لا `MAX(id)+1`. الخدمة/المزامنة تستدعي `next_business_number('<seq>', 'WO-2026-')`
 داخل المعاملة نفسها، وبعد أي استيراد جماعي أو seed تُنفَّذ `SELECT * FROM fn_align_number_sequences()`
@@ -194,7 +200,7 @@ production_shift_logs_unitId_shiftDate_shiftCode_key ON public.production_shift_
 
 الفهارس الجزئية (`WHERE "deletedAt" IS NULL` أو `WHERE status <> …`) ضرورية هنا لأن كل الجداول
 تستخدم الحذف المنطقي، ولأن شاشات المشغل لا تعرض أبدًا ما أُغلق — فالفهرس العام يصير كبيرًا بلا فائدة.
-تُراجَع القائمة كاملة في `docs/generated/schema.postgres.sql` (145 فهرسًا، منها 97 غير مفاتيح).
+تُراجَع القائمة كاملة في `docs/generated/schema.postgres.sql` (146 فهرسًا، منها 99 غير مفاتيح على القاعدة الحيّة).
 
 ## 10. كيف تُنشئ القاعدة فعليًا
 
@@ -202,7 +208,7 @@ production_shift_logs_unitId_shiftDate_shiftCode_key ON public.production_shift_
 export DATABASE_URL="postgresql://newport:***@localhost:5432/newport?schema=public"
 npm run db:generate -w @newport/api                 # أنواع Prisma
 cd apps/api && npx prisma migrate deploy            # 1) DDL Prisma  2) ترحيل الامتدادات/RLS/الviews
-npm run seed -w @newport/api                         # idempotent: الهيكل + 91 صلاحية + 21 دورًا + 36 منحًا + 23 مستخدمًا
+npm run seed -w @newport/api                         # idempotent: الهيكل + 94 صلاحية + 21 دورًا + 36 منحًا (شعبة×دور) + 404 ربط + 23 مستخدمًا
 # أو بالكامل عبر Docker:  docker compose -f deploy/docker-compose.yml up -d
 ```
 لإعادة توليد ملفات التوثيق بعد أي تعديل على المخطط:

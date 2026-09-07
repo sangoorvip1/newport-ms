@@ -155,11 +155,13 @@ const DOC: Record<string, SectionDoc> = {
       'إدارة أجهزة المختبر: معايرة، صيانة، مواد مرجعية، ومحاليل.',
     ],
     features: [
-      { name: 'طلب عينة من الوردية/الإنتاج', screen: 'SampleRequest', client: 'كلاهما', api: 'push: labSample' },
-      { name: 'إدخال نتائج التحاليل', screen: 'ResultEntry', client: 'كلاهما', api: 'push: labResult', note: 'المدخل من الهاتف يبقى مبدئيًا حتى lab.result.verify' },
-      { name: 'مطابقة تلقائية مع مواصفات المنتج', screen: 'SpecCheck', client: 'مكتب', api: 'قواعد في packages/domain (limits)' },
-      { name: 'فتح/تحقيق/إغلاق OOS و CAPA', screen: 'OosCase', client: 'مكتب', api: 'lab module (1ب) · pull: labSample', note: 'lab.oos.manage' },
-      { name: 'إصدار شهادة تحليل للدفعة', screen: 'CoAPreview', client: 'مكتب', api: 'documents · report.export', note: 'lab.report.export' },
+      { name: 'طلب عينة من الوردية/الإنتاج', screen: 'SampleRequest', client: 'كلاهما', api: 'POST /v1/lab/samples · push: labSample', note: 'العينة تملكها الشعبة المنتِجة؛ المختبر لا يفتحها باسم شعبة أخرى' },
+      { name: 'إدخال نتائج التحاليل', screen: 'ResultEntry', client: 'كلاهما', api: 'POST /v1/lab/samples/:id/results · push: labResult', note: 'المدخل من الهاتف يبقى مبدئيًا حتى lab.result.verify؛ الاستبدال بعد الاعتماد 409' },
+      { name: 'مطابقة تلقائية مع مواصفات المنتج', screen: 'SpecCheck', client: 'كلاهما', api: 'GET /v1/lab/parameters · evaluateSpec في @newport/domain', note: 'الحساب في حزمة واحدة ليراه الهاتف والخادم متطابقين' },
+      { name: 'فتح/تحقيق/إغلاق OOS و CAPA', screen: 'OosCase', client: 'مكتب', api: 'GET /v1/lab/oos · POST /v1/lab/oos/:id', note: 'تُنشأ تلقائيًا من نتيجة مخالفة؛ الإغلاق يتطلب سببًا جذريًا + نص CAPA (قيد في القاعدة أيضًا)' },
+      { name: 'تدقيق (اعتماد) النتائج نتيجةً نتيجة', screen: 'ResultVerification', client: 'مكتب', api: 'POST /v1/lab/results/:id/verify', note: 'lab.result.verify — المُدخِل لا يعتمد نتائج نفسه؛ اكتمال التدقيق ينقل العينة إلى VERIFIED' },
+      { name: 'إصدار شهادة تحليل للدفعة', screen: 'CoAPreview', client: 'مكتب', api: 'GET /v1/lab/certificates/:sampleId · documents', note: 'lab.report.export — تُحجب ما دامت حالة OOS مفتوحة على العينة' },
+      { name: 'مؤشرات المختبر (دوران/مطابقة/OOS)', screen: 'LabKpi', client: 'مكتب', api: 'GET /v1/lab/stats', note: 'نافذة 30 يومًا داخل نطاق المستخدم' },
       { name: 'سجل معايرة أجهزة المختبر', screen: 'CalibrationLog', client: 'كلاهما', api: 'push: assetReading' },
     ],
     rules: [

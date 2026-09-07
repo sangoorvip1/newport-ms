@@ -11,7 +11,7 @@
 | # | اقرأ | لماذا |
 |---|---|---|
 | 1 | `packages/domain/src/org.ts` | الهيكل المرجعي: 3 أقسام / 13 شعبة، و`fieldWork` يحدد وضع الميدان في الهاتف |
-| 2 | `packages/domain/src/permissions.ts` · `roles.ts` | 91 صلاحية، 21 دورًا، مصفوفة منح شعبة×دور، والدالة `resolveGrants()` |
+| 2 | `packages/domain/src/permissions.ts` · `roles.ts` | 94 صلاحية، 21 دورًا، مصفوفة منح شعبة×دور، والدالة `resolveGrants()` |
 | 3 | `packages/domain/src/sync.ts` | عقد المزامنة: `SCHEMA_VERSION=3`، 19 كيانًا، `SYNC_META` (جدول/دمج/حقول محمية) |
 | 4 | `apps/api/src/security/access.guard.ts` | كيف يُقيَّم الطلب: JWT ← كاش الصلاحيات ← الإصدار ← القيد ← الصلاحية ← النطاق |
 | 5 | `apps/api/src/sync/sync-engine.service.ts` | `push` (idempotency + بوابة + دمج حقلي) و`pull` (cursor) |
@@ -70,6 +70,7 @@
 | `roles.ts` | `ROLE_DEFS` (21)، `ACCESS_MATRIX` (منح شعبة×دور)، `GLOBAL_GRANTS`، `EVERY_USER_GRANT`، **`resolveGrants()`**، `withinCeiling()`، `READ_ONLY_ROLES` | seed، `PermissionService`، `/org/permissions-verify`، `scripts/gen-features-doc.ts` |
 | `matrix.ts` | `buildMatrix()` / `buildGlobalGrants()` / `matrixToMarkdown()` — كلها **مشتقة** من `resolveGrants()` | `npm run matrix` ← `docs/generated/permissions.*` |
 | `perm.ts` | أدوات النطاق: مقارنة الرتب، دمج منح متعددة لنفس المستخدم | `PermissionService`، `buildScopeWhere` |
+| `lab.ts` | `evaluateSpec` (حكم المطابقة)، `severityForVerdict`، `OOS_TRANSITIONS`، `SAMPLE_TRANSITIONS`، `statusAfterResultEntry`، `buildCertificateRows`، `canIssueCertificate` — تُستعمل في الخادم وفي الواجهتين فلا يختلف الحكم بينهما |
 | `workorder.ts` | آلة الحالة `WO_TRANSITIONS`، `canTransition()`، `allowedNextStates()`، `computeSla()`، SLA لكل أولوية | WorkOrder service/clients (يمنع انتقالات غير شرعية قبل إرسالها) |
 | `sync.ts` | `SCHEMA_VERSION`، `SYNC_ENTITIES` (19)، `SYNC_META` (جدول/استراتيجية دمج/حقول معتمدة/كيان أب)، قاعدة **جدول واحد = كيان واحد** | محرك المزامنة، `client.ts`، فحوص العقد، مولّد registry |
 | `dto.ts` | Zod لكل طلب/استجابة (login/AuthSession/change-password/WorkOrder/sync/attendance…) | ZodPipe في الخادم + نماذج الإدخال في العملاء |
@@ -93,6 +94,7 @@
 | `security/` | `auth.controller/service`، `access.guard`، `permission.service`، `auth.module` (`@Global`) | `POST login/refresh/logout/change-password`, `GET me/permission-catalog` | كل شيء أمني هنا؛ `AuthModule` عالمي لأن `AccessGuard` و`PermissionService` مطلوبان في كل الوحدات |
 | `organization/` | controller + service | `GET tree/sub-departments/drift/users/permissions-matrix/permissions-verify`, `POST users/assign-role` | `/drift` و`/permissions-verify` = بوابتا قبول بعد النشر |
 | `workorder/` | controller + service | `GET/POST work-orders`, `GET :id`, `POST :id/transition`, `POST :id/labor` | FSM من `domain` + SLA + أرقام من `next_business_number` |
+| `lab/` | `lab.controller.ts` + `lab.service.ts` + `lab.module.ts` | `GET parameters/stats/samples/samples/:id/oos/certificates/:sampleId`, `POST samples`, `POST samples/:id/results`, `POST results/:id/verify`, `POST oos/:id` | العينة مملوكة للشعبة المنتِجة؛ المختبر (kind=LAB) يقرأ قسمه كله؛ الأرقام وحالات OOS والتدقيق من ختم الخادم |
 | `production/` | `production.module.ts` (controller + service في ملف واحد) | `GET params/trend`, `GET/POST shift-logs`, `POST shift-logs/:id/approve` | الاعتماد يختم `approvedById/approvedAt` server-side |
 | `time/` | `attendance.module.ts` (controller + service) | `POST punches/import/recalculate/corrections/corrections/:id/decide`, `GET daily/payroll-export` | تكامل ZKTeco (ملف/JSON) + إعادة حساب + تصحيحات معتمدة |
 | `sync/` | `sync.controller.ts` + `sync-engine.service.ts` | `POST push`, `GET pull`, `POST batch-plan`, `GET protocol` | المفصّل في §6 |
@@ -102,8 +104,8 @@
 
 > الوحدات الصغيرة (production/time/audit) مكتوبة حاليًا كملف وحدة واحد يضم controller+service.
 > القسمة إلى `*.controller.ts` / `*.service.ts` مطلوبة عند نمو المسارات (المرحلة 1ب) — العقد لن يتغير.
-> **لا توجد وحدة `lab` بعد**: بيانات المختبر تُدفَع/تُسحَب عبر محرك المزامنة (`labSample`, `labResult`)
-> وتُنشر في `pull`؛ شاشات OOS/CAPA وتقاريرها هي أول ما يُضاف في 1ب (انظر §12).
+> وحدة `lab` قائمة (REST كامل للعينات/النتائج/التدقيق/OOS/الشهادات) **بالإضافة** إلى مسار المزامنة
+> (`labSample`, `labResult`) — المساران يكتبان الجدول نفسه، لذا الأرقام وختم الاعتمادات في الخادم فقط.
 
 ### 4.2 دورة حياة الطلب
 
@@ -166,7 +168,7 @@ SELF     : { createdById / byUserId / userId }  // صفّه هو فقط
 - **تسلسلات الأرقام المستندية:** 13 تسلسلًا للأعمال (`wo_number_seq`, `lab_sample_number_seq`, `permit_number_seq`,
   `je_number_seq`, `grn/mi/req/pr/po/so/si/oos/incident`) + دالة `next_business_number(seq, prefix)`
   التي تولّد `WO-2026-000042`. بعد أي استيراد جماعي تُنفَّذ `fn_align_number_sequences()`.
-- **23 قيد CHECK** باسم `ck_*` تمنع حالة لا تصلح حتى لو وصلتها واجهة مكسورة
+- **26 قيد CHECK** (`ck_*` منها 3 في ترحيل المختبر) تمنع حالة لا تصلح حتى لو وصلتها واجهة مكسورة
   (مثل: `actualEndAt >= actualStartAt`، `qty > 0`، `shiftStart < shiftEnd` لنفس اليوم…).
 - **دوال/مؤجّلات مزامنة** (الجزء 4–5 من الترحيل):
   - `sync_entity_registry(entity, table_name, merge, push_priority)` مُنشَأ **ومعبّأ (19 صفًا) داخل الترحيل**،
@@ -300,7 +302,8 @@ src/ui/kit.tsx       RTL، أزرار كبيرة، قوائم اختيار بد�
 
 | مجموعة | عدد | ماذا تغطي |
 |---|---|---|
-| `packages/domain` | 51 | سلامة السجل (91/21/13)، عدم وجود منح أوسع من `maxScope`، الحد الأدنى الميداني ممنوح ولا يُمنح للقراءة فقط، `buildMatrix` = `resolveGrants`، آلة الحالة، SLA، دوال البصمة، عميل المزامنة (طابور/backoff/دمج/full-resync) |
+| `packages/domain` | 71 | سلامة السجل (91/21/13)، عدم وجود منح أوسع من `maxScope`، الحد الأدنى الميداني ممنوح ولا يُمنح للقراءة فقط، `buildMatrix` = `resolveGrants`، آلة الحالة، SLA، دوال البصمة، عميل المزامنة (طابور/backoff/دمج/full-resync) |
+| `apps/api/test/lab-scope.spec.ts` | 11 | نطاق المختبر: توسيع شعبة kind=LAB إلى القسم، **ولا يُوسَّع SELF**، حارس ملكية العينة عند الإنشاء، و403 مفسَّر |
 | `apps/api/test/access-sync.spec.ts` | 16 | الحارس: منح/نطاق/`DENIED_COLUMNS`/append_only/idempotency/رفض DELETE على سجلات حدثية/`buildScopeWhere` |
 | `apps/api/test/schema-contract.spec.ts` | 5 | كل اسم جدول/عمود مستعمل في `SYNC_META`/`ENTITY_MAP` موجود في `schema.prisma`؛ لا snake_case ولا `#` في SQL الترحيل |
 | `apps/api/test/sync-triggers.spec.ts` | 5 | **على قاعدة حيّة**: registry=19، `trg_sync` مرة لكل جدول، `trg_bump_version` لا يمس `users`، `fn_align_number_sequences()`، لا سطر `#` |
@@ -310,7 +313,7 @@ src/ui/kit.tsx       RTL، أزرار كبيرة، قوائم اختيار بد�
 | `scripts/e2e-smoke.mjs` | 37 | HTTP حيّ: جاهزية، جلسة، قيد تغيير كلمة المرور، تدوير refresh + كشف إعادة الاستعمال، تطابق الهيكل/الصلاحيات، دورة أمر شغل، رفض انتقال 409، مزامنة push/pull/idempotency/الحماية، سجل تدقيق، ختم `syncSeq` |
 
 ```bash
-npm run test:all && npm run typecheck:all            # 91 فحصًا + typecheck نظيف (4 حزم)
+npm run test:all && npm run typecheck:all            # 122 فحصًا + typecheck نظيف (4 حِزَم)
 API_URL=… npm run e2e -w @newport/api                # 37/37
 npm run docs:all -w @newport/api                     # مصفوفة + 03 + DDL + كتالوج (وتفحص أن كل رمز مذكور حقيقي)
 ```
@@ -372,7 +375,7 @@ npm run docs:all -w @newport/api                     # مصفوفة + 03 + DDL +
 
 | فجوة | أين | خطوة الإصلاح |
 |---|---|---|
-| لا مسارات REST لوحدة المختبر (OOS/CAPA، شهادات) | `apps/api/src/` (لا `lab/`) | `lab/{lab.controller,lab.service,lab.module}.ts` + صلاحية `lab.*`؛ البيانات تُزرع حاليًا عبر `sync` |
+| الشهادة تُرجَّع JSON لا ملف PDF/Excel | `GET /v1/lab/certificates/:sampleId` | طباعة من الواجهة عبر قالب موقّع + `documents` (البيانات جاهزة ومُحكَمة) |
 | المرفقات: metadata فقط، بلا بايتات | `documents` + `config.storage` | presigned PUT/GET عبر MinIO + `POST /v1/documents/presign` |
 | حدّ المعدن والكاش في الذاكرة | `rate-limit.guard.ts`, `permission.service.ts` | Redis عند أكثر من نسخة API (الملف يوضح البديل) |
 | لا دفع إشعارات (FCM/APNs) | `config.push` معطّل | `notif.view` + سحب الإشعارات عند `pull`؛ ثم expo-notifications |
@@ -382,5 +385,5 @@ npm run docs:all -w @newport/api                     # مصفوفة + 03 + DDL +
 | التوثيق العربي للمستخدم النهائي | — | `docs/06-user-guide.md` لكل شعبة (من `docs/03` حرفيًا) |
 | لا OpenAPI spec | `apps/api` | `@nestjs/swagger` + تصدير `openapi.json` في `docs:all` لتوليد عميل REST آليًا |
 
-**ترتيب التنفيذ المقترح (1ب):** المختبر REST + تعارضات + presigned uploads → swagger/client مولّد →
+**ترتيب التنفيذ المقترح (1ب):** تعارضات + presigned uploads + طباعة الشهادة → swagger/client مولّد →
 دفع إشعارات → بوابة الموظف الذاتية (`SELF_SERVICE_PERMISSIONS` جاهزة) → تكامل SAP/Oracle للمالية.

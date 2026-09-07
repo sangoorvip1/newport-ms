@@ -1726,6 +1726,9 @@ CREATE UNIQUE INDEX "lab_oos_cases_code_key" ON "lab_oos_cases"("code");
 CREATE INDEX "lab_oos_cases_status_severity_idx" ON "lab_oos_cases"("status", "severity");
 
 -- CreateIndex
+CREATE INDEX "lab_oos_cases_sampleId_idx" ON "lab_oos_cases"("sampleId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "work_orders_number_key" ON "work_orders"("number");
 
 -- CreateIndex
@@ -2132,6 +2135,9 @@ ALTER TABLE "lab_results" ADD CONSTRAINT "lab_results_sampleId_fkey" FOREIGN KEY
 
 -- AddForeignKey
 ALTER TABLE "lab_results" ADD CONSTRAINT "lab_results_parameterId_fkey" FOREIGN KEY ("parameterId") REFERENCES "lab_parameters"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "lab_oos_cases" ADD CONSTRAINT "lab_oos_cases_sampleId_fkey" FOREIGN KEY ("sampleId") REFERENCES "lab_samples"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "work_orders" ADD CONSTRAINT "work_orders_facilityId_fkey" FOREIGN KEY ("facilityId") REFERENCES "facilities"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

@@ -23,16 +23,16 @@
 
 ```
 newport-ms/
-├── packages/domain/          # ❤️ مصدر الحقيقة: الهيكل، 91 صلاحية، 21 دورًا، مصفوفة الوصول،
+├── packages/domain/          # ❤️ مصدر الحقيقة: الهيكل، 94 صلاحية، 21 دورًا، مصفوفة الوصول،
 │                             #    آلة حالة أوامر العمل، عقد المزامنة v3، DTOs بـ Zod، محرّك الحضور
 │   ├── src/{org,permissions,roles,workorder,sync,client,dto,attendance,perm,matrix}.ts
-│   ├── tests/*.spec.ts       # 51 اختبار وحدة (كلها خضراء)
+│   ├── tests/*.spec.ts       # 71 اختبار وحدة (كلها خضراء)
 │   └── scripts/gen-matrix.ts # يولّد docs/generated/permissions.matrix.{json,md}
 ├── apps/api/                 # NestJS 11: الأمان، التنظيم، الصيانة، الإنتاج، المختبر، البصمة، المزامنة، التدقيق
 │   ├── prisma/schema.prisma  # 85 نموذج + 25 enum → docs/generated/schema.postgres.sql
 │   ├── prisma/migrations/…   # الامتدادات + التسلسلات + RLS + change-log triggers (SQL يدوي)
 │   ├── prisma/seed.ts        # seed idempotent للهيكل + المصفوفة + 23 مستخدمًا
-│   └── test/*.spec.ts        # 32 اختبارًا: الأمان+المزامنة، تعاقد المخطط، المؤجّلات على قاعدة حيّة،
+│   └── test/*.spec.ts        # 43 اختبارًا: الأمان+المزامنة، نطاق المختبر، تعاقد المخطط، المؤجّلات على قاعدة حيّة،
 │                             #    تسلسل BigInt، عقد الأخطاء
 ├── apps/desktop/             # Electron + React 19 (Dexie/IndexedDB فوق SyncClient)
 ├── apps/mobile/              # Expo 57 + React Native (SQLite فوق SyncClient نفسه)
@@ -47,11 +47,11 @@ newport-ms/
 1. **Row-Level Security**: السياسات `p_wo_scope` و`p_slog_scope` و`p_punch_scope` و`p_je_finance` (مع `FORCE ROW LEVEL SECURITY`) تقرأ `app.scope_kind / app.subdept_id / app.dept_id / app.user_id` المضبوطة عبر `PrismaService.withScope()` (`set_config(..., true)` داخل معاملة). حتى لو نسي استعلامٌ فلترة النطاق، القاعدة لا تُسرّب صفوفًا خارج النطاق.
 2. **`jsonb` + GIN** للنماذج الميدانية (قراءات الجولة، `exceptionsJson`، `changes` في سجل التدقيق) دون تفكيك الجدول إلى EAV.
 3. **التسلسلات + `nextval`** لرقم أمر العمل (`WO-2026-000123`) في نفس المعاملة — لا تنافس على `MAX(id)+1` ولا فجوات عند rollback.
-4. **DDL المولّد قابل للتدقيق**: `docs/generated/schema.postgres.sql` (2288 سطرًا: 85 جدولًا، 93 مفتاحًا خارجيًا، 145 فهرسًا — منها 97 غير مفاتيح) يراجعه مسؤولو المعمل قبل التنفيذ.
+4. **DDL المولّد قابل للتدقيق**: `docs/generated/schema.postgres.sql` (2294 سطرًا: 85 جدولًا، 94 مفتاحًا خارجيًا في Prisma + 1 مضاف في الترحيل، 146 فهرسًا — 99 منها غير مفاتيح) يراجعه مسؤولو المعمل قبل التنفيذ.
 5. **التقييمات العددية للحضور** تحتاج أرقامًا دقيقة: `workedMinutes/overtimeMinutes` أعداد صحيحة بالدقائق، والرواتب تُجمَّع شهريًا من `attendance_daily_summary` لا من `attendance_punches`.
 
 ### قرارات تصميمية داخل المخطط
-- **الأسماء**: `@@map` يحوّل اسم الجدول إلى snake_case، لكن الأعمدة تبقى camelCase → أي SQL خام يجب أن يكتب `"subDeptId"` بين علامتي اقتباس. (انضمّت 23 قيد CHECK باسم `ck_*` إلى ترحيل الامتدادات لهذا السبب.)
+- **الأسماء**: `@@map` يحوّل اسم الجدول إلى snake_case، لكن الأعمدة تبقى camelCase → أي SQL خام يجب أن يكتب `"subDeptId"` بين علامتي اقتباس. (انضمّت 26 قيد CHECK باسم `ck_*` إلى ترحيل الامتدادات وسلامة المختبر لهذا السبب.)
 - **كل جدول قابل للمزامنة** يحمل: `version` (int، يزيد على الخادم)، `syncSeq` (bigint، تسلسل التغيير)، `deletedAt` (حذف منطقي)، `clientOpId` (آخر عملية دفع).
 - **الجداول الحدثية append-only**: `wo_logs`, `attendance_punches`, `sync_change_log`, `audit_trails` — الحذف ممنوع عليها حتى من مدير النظام (يُراجَع في `sync-engine.service` + قيد في القاعدة).
 
@@ -100,7 +100,7 @@ newport-ms/
 2. **تخزين المستندات**: `CONFIG.storage` يصف minio/s3/local، لكن قناة presigned upload غير منفّذة — المرفقات حاليًا تمر كـ `dataUrl` صغيرة عبر المزامنة؛ يجب إضافة رفع مباشر قبل أي استخدام بكميات كبيرة.
 3. **تكامل SAP/ERP**: `integration_configs` مع `credentialRef` موجود، والمزامنة ثنائية الاتجاه للطلبات/الفواتير غير منفّذة.
 4. **حدود المعدل داخلية الذاكرة**: صالحة لنسخة خادم واحدة؛ مع أكثر من نسخة يلزم Redis.
-5. **لا وحدة `lab` في `apps/api/src`**: عينات/نتائج المختبر تُزرع وتُسحب عبر محرك المزامنة (`labSample`, `labResult`) وتُقيَّد بسياسات الصلاحية، لكن لا توجد REST routes لشهادات OOS/CAPA بعد — أول بند في المرحلة 1ب (`docs/05` §12).
+5. **شهادة التحليل تُبنى ككائن JSON لا كملف**: `GET /v1/lab/certificates/:sampleId` يُرجع صفوف الشهادة والتواقيع، أما طباعة PDF/Excel فواجهة مكتب (لم تُنفَّذ)؛ وربط الشهادة بأوامر البيع يتم عبر `documents`.
 6. **`pg_stat_statements`** يحتاج `shared_preload_libraries` (مضبوط في docker-compose)؛ على تثبيت PostgreSQL يدوي يُضاف في `postgresql.conf` قبل إنشاء الامتداد.
 
 ## 7. أوامر التحقق (كلها تعمل في المستودع)
@@ -108,16 +108,16 @@ newport-ms/
 ```bash
 npm ci
 npm run build -w @newport/domain
-npm run test -w @newport/domain      # 51 اختبارًا: صلاحيات، مصفوفة، WO FSM، تعاقد المزامنة، طبقة العميل
+npm run test -w @newport/domain      # 71 فحصًا: صلاحيات، مصفوفة، WO FSM، منطق المختبر، تعاقد المزامنة، طبقة العميل
 npm run typecheck -w @newport/api     # src + prisma/seed + test (0 أخطاء)
-npm run test -w @newport/api          # 32 اختبارًا: الأمان/المزامنة + تعاقد المخطط + المؤجّلات على قاعدة حيّة
+npm run test -w @newport/api          # 43 اختبارًا: الأمان/المزامنة + نطاق المختبر + تعاقد المخطط + المؤجّلات على قاعدة حيّة
 npm run typecheck -w @newport/desktop # tsconfig.json + tsconfig.electron.json
 npm run build -w @newport/desktop     # vite build (حزمة الإنتاج)
 npm run test -w @newport/mobile       # 8 اختبارات: الطابور دون اتصال + مخزن SQLite
-npm run test:all                      # 91 فحصًا (domain 51 + api 32 + mobile 8)
+npm run test:all                      # 122 فحصًا (domain 71 + api 43 + mobile 8)
 npm run typecheck:all                 # 4 حِزَم: domain + api + desktop + mobile (0 أخطاء)
 npm run docs:all -w @newport/api      # مصفوفة الوصول + docs/03 + DDL + كتالوج المخطط (كل الوثائق مشتقة من الكود)
-API_URL=http://127.0.0.1:3000/api DATABASE_URL=… npm run e2e -w @newport/api   # 37 فحصًا حيًّا على الخادم
+API_URL=http://127.0.0.1:3000/api DATABASE_URL=… npm run e2e -w @newport/api   # 58 فحصًا حيًّا على الخادم
 npm run db:ddl && node apps/api/scripts/gen-schema-docs.mjs   # إعادة توليد المخطط والكتالوج
 ```
 

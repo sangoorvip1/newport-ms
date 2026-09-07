@@ -7,10 +7,10 @@
 
 | الدور | النطاق | الصلاحيات |
 |---|---|---|
-| رئيس الشعبة (SECTION_HEAD) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `fin.cost.view` · `hr.att.view` · `hr.leave.approve` · `hr.shift.view` · `lab.oos.manage` · `lab.report.export` · `lab.result.enter` · `lab.sample.create` · `maint.wo.create` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.alarm.ack` · `prod.downtime.create` · `prod.downtime.view` · `prod.log.approve` · `prod.log.create` · `prod.log.update` · `prod.log.view` · `prod.param.create` · `prod.param.view` · `report.export` · `report.view` · `sync.pull` · `sync.push` · `wh.item.view` |
-| مشرف الوردية (SHIFT_SUPERVISOR) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `lab.sample.create` · `maint.wo.create` · `notif.view` · `org.dept.view` · `prod.alarm.ack` · `prod.downtime.create` · `prod.downtime.view` · `prod.log.create` · `prod.log.update` · `prod.log.view` · `prod.param.create` · `prod.param.view` · `sync.pull` · `sync.push` |
-| مراقب سيطرة (CONTROL_ROOM_OPERATOR) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `maint.wo.create` · `notif.view` · `org.dept.view` · `prod.alarm.ack` · `prod.downtime.create` · `prod.downtime.view` · `prod.log.create` · `prod.log.update` · `prod.log.view` · `prod.param.create` · `prod.param.view` · `sync.pull` · `sync.push` |
-| فني صيانة (ميداني) (FIELD_TECHNICIAN) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.form.create` · `maint.asset.view` · `maint.condition.record` · `maint.permit.create` · `maint.permit.view` · `maint.wo.close` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.create` · `prod.log.view` · `prod.param.create` · `sync.pull` · `sync.push` · `wh.req.create` · `wh.return` |
+| رئيس الشعبة (SECTION_HEAD) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `fin.cost.view` · `hr.att.view` · `hr.leave.approve` · `hr.shift.view` · `lab.oos.manage` · `lab.oos.view` · `lab.report.export` · `lab.result.enter` · `lab.result.view` · `lab.sample.create` · `lab.sample.view` · `maint.wo.create` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.alarm.ack` · `prod.downtime.create` · `prod.downtime.view` · `prod.log.approve` · `prod.log.create` · `prod.log.update` · `prod.log.view` · `prod.param.create` · `prod.param.view` · `report.export` · `report.view` · `sync.pull` · `sync.push` · `wh.item.view` |
+| مشرف الوردية (SHIFT_SUPERVISOR) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `lab.sample.create` · `lab.sample.view` · `maint.wo.create` · `notif.view` · `org.dept.view` · `prod.alarm.ack` · `prod.downtime.create` · `prod.downtime.view` · `prod.log.create` · `prod.log.update` · `prod.log.view` · `prod.param.create` · `prod.param.view` · `sync.pull` · `sync.push` |
+| مراقب سيطرة (CONTROL_ROOM_OPERATOR) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `lab.sample.view` · `maint.wo.create` · `notif.view` · `org.dept.view` · `prod.alarm.ack` · `prod.downtime.create` · `prod.downtime.view` · `prod.log.create` · `prod.log.update` · `prod.log.view` · `prod.param.create` · `prod.param.view` · `sync.pull` · `sync.push` |
+| فني صيانة (ميداني) (FIELD_TECHNICIAN) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.form.create` · `lab.sample.view` · `maint.asset.view` · `maint.condition.record` · `maint.permit.create` · `maint.permit.view` · `maint.wo.close` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.create` · `prod.log.view` · `prod.param.create` · `sync.pull` · `sync.push` · `wh.req.create` · `wh.return` |
 
 #### شعبة الأمونيا — `PROD-AMM`
 
@@ -18,9 +18,9 @@
 
 | الدور | النطاق | الصلاحيات |
 |---|---|---|
-| رئيس الشعبة (SECTION_HEAD) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `fin.cost.view` · `hr.att.view` · `hr.leave.approve` · `hr.shift.view` · `lab.sample.create` · `maint.wo.create` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.alarm.ack` · `prod.downtime.create` · `prod.downtime.view` · `prod.log.approve` · `prod.log.create` · `prod.log.update` · `prod.log.view` · `prod.param.create` · `prod.param.view` · `prod.utility.manage` · `report.export` · `report.view` · `sync.pull` · `sync.push` |
-| مشرف الوردية (SHIFT_SUPERVISOR) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `lab.sample.create` · `maint.wo.create` · `notif.view` · `org.dept.view` · `prod.alarm.ack` · `prod.downtime.create` · `prod.downtime.view` · `prod.log.create` · `prod.log.update` · `prod.log.view` · `prod.param.create` · `prod.param.view` · `sync.pull` · `sync.push` |
-| مراقب سيطرة (CONTROL_ROOM_OPERATOR) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `lab.sample.create` · `maint.wo.create` · `notif.view` · `org.dept.view` · `prod.alarm.ack` · `prod.downtime.create` · `prod.downtime.view` · `prod.log.create` · `prod.log.update` · `prod.log.view` · `prod.param.create` · `prod.param.view` · `sync.pull` · `sync.push` |
+| رئيس الشعبة (SECTION_HEAD) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `fin.cost.view` · `hr.att.view` · `hr.leave.approve` · `hr.shift.view` · `lab.result.view` · `lab.sample.create` · `lab.sample.view` · `maint.wo.create` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.alarm.ack` · `prod.downtime.create` · `prod.downtime.view` · `prod.log.approve` · `prod.log.create` · `prod.log.update` · `prod.log.view` · `prod.param.create` · `prod.param.view` · `prod.utility.manage` · `report.export` · `report.view` · `sync.pull` · `sync.push` |
+| مشرف الوردية (SHIFT_SUPERVISOR) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `lab.sample.create` · `lab.sample.view` · `maint.wo.create` · `notif.view` · `org.dept.view` · `prod.alarm.ack` · `prod.downtime.create` · `prod.downtime.view` · `prod.log.create` · `prod.log.update` · `prod.log.view` · `prod.param.create` · `prod.param.view` · `sync.pull` · `sync.push` |
+| مراقب سيطرة (CONTROL_ROOM_OPERATOR) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `lab.sample.create` · `lab.sample.view` · `maint.wo.create` · `notif.view` · `org.dept.view` · `prod.alarm.ack` · `prod.downtime.create` · `prod.downtime.view` · `prod.log.create` · `prod.log.update` · `prod.log.view` · `prod.param.create` · `prod.param.view` · `sync.pull` · `sync.push` |
 
 #### شعبة أبراج التبريد — `PROD-CT`
 
@@ -28,9 +28,9 @@
 
 | الدور | النطاق | الصلاحيات |
 |---|---|---|
-| رئيس الشعبة (SECTION_HEAD) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `fin.cost.view` · `hr.att.view` · `hr.leave.approve` · `hr.shift.view` · `lab.sample.create` · `maint.wo.create` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.alarm.ack` · `prod.downtime.create` · `prod.downtime.view` · `prod.log.approve` · `prod.log.create` · `prod.log.update` · `prod.log.view` · `prod.param.create` · `prod.param.view` · `prod.utility.manage` · `report.export` · `report.view` · `sync.pull` · `sync.push` |
-| مشرف الوردية (SHIFT_SUPERVISOR) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `lab.sample.create` · `maint.wo.create` · `notif.view` · `org.dept.view` · `prod.alarm.ack` · `prod.downtime.create` · `prod.downtime.view` · `prod.log.create` · `prod.log.update` · `prod.log.view` · `prod.param.create` · `prod.param.view` · `prod.utility.manage` · `sync.pull` · `sync.push` |
-| فني صيانة (ميداني) (FIELD_TECHNICIAN) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.form.create` · `maint.asset.view` · `maint.condition.record` · `maint.permit.create` · `maint.permit.view` · `maint.wo.close` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.create` · `prod.log.view` · `prod.param.create` · `prod.utility.manage` · `sync.pull` · `sync.push` · `wh.req.create` · `wh.return` |
+| رئيس الشعبة (SECTION_HEAD) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `fin.cost.view` · `hr.att.view` · `hr.leave.approve` · `hr.shift.view` · `lab.result.view` · `lab.sample.create` · `lab.sample.view` · `maint.wo.create` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.alarm.ack` · `prod.downtime.create` · `prod.downtime.view` · `prod.log.approve` · `prod.log.create` · `prod.log.update` · `prod.log.view` · `prod.param.create` · `prod.param.view` · `prod.utility.manage` · `report.export` · `report.view` · `sync.pull` · `sync.push` |
+| مشرف الوردية (SHIFT_SUPERVISOR) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `lab.sample.create` · `lab.sample.view` · `maint.wo.create` · `notif.view` · `org.dept.view` · `prod.alarm.ack` · `prod.downtime.create` · `prod.downtime.view` · `prod.log.create` · `prod.log.update` · `prod.log.view` · `prod.param.create` · `prod.param.view` · `prod.utility.manage` · `sync.pull` · `sync.push` |
+| فني صيانة (ميداني) (FIELD_TECHNICIAN) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.form.create` · `lab.sample.view` · `maint.asset.view` · `maint.condition.record` · `maint.permit.create` · `maint.permit.view` · `maint.wo.close` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.create` · `prod.log.view` · `prod.param.create` · `prod.utility.manage` · `sync.pull` · `sync.push` · `wh.req.create` · `wh.return` |
 
 #### المختبر — `PROD-LAB`
 
@@ -38,9 +38,9 @@
 
 | الدور | النطاق | الصلاحيات |
 |---|---|---|
-| رئيس الشعبة (SECTION_HEAD) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `lab.oos.manage` · `lab.report.export` · `lab.result.enter` · `lab.result.verify` · `lab.sample.create` · `maint.wo.create` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.view` · `prod.log.view` · `prod.param.view` · `report.export` · `report.view` · `sync.pull` · `sync.push` |
-| مسؤول المختبر (LAB_SUPERVISOR) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `lab.oos.manage` · `lab.report.export` · `lab.result.enter` · `lab.result.verify` · `lab.sample.create` · `notif.view` · `org.dept.view` · `prod.log.view` · `prod.param.view` · `sync.pull` · `sync.push` |
-| محلل مختبر (LAB_ANALYST) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `lab.oos.manage` · `lab.result.enter` · `lab.sample.create` · `notif.view` · `org.dept.view` · `prod.log.view` · `prod.param.view` · `sync.pull` · `sync.push` |
+| رئيس الشعبة (SECTION_HEAD) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `lab.oos.manage` · `lab.oos.view` · `lab.report.export` · `lab.result.enter` · `lab.result.verify` · `lab.result.view` · `lab.sample.create` · `lab.sample.view` · `maint.wo.create` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.view` · `prod.log.view` · `prod.param.view` · `report.export` · `report.view` · `sync.pull` · `sync.push` |
+| مسؤول المختبر (LAB_SUPERVISOR) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `lab.oos.manage` · `lab.oos.view` · `lab.report.export` · `lab.result.enter` · `lab.result.verify` · `lab.result.view` · `lab.sample.create` · `lab.sample.view` · `notif.view` · `org.dept.view` · `prod.log.view` · `prod.param.view` · `sync.pull` · `sync.push` |
+| محلل مختبر (LAB_ANALYST) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `lab.oos.manage` · `lab.oos.view` · `lab.result.enter` · `lab.result.view` · `lab.sample.create` · `lab.sample.view` · `notif.view` · `org.dept.view` · `prod.log.view` · `prod.param.view` · `sync.pull` · `sync.push` |
 
 
 ### قسم الصيانة (Maintenance Department)
@@ -52,7 +52,7 @@
 | الدور | النطاق | الصلاحيات |
 |---|---|---|
 | رئيس الشعبة (SECTION_HEAD) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.emp.view` · `hr.form.view` · `hr.leave.approve` · `hr.shift.view` · `maint.asset.manage` · `maint.asset.view` · `maint.backlog.view` · `maint.condition.record` · `maint.condition.view` · `maint.downtime.verify` · `maint.permit.approve` · `maint.permit.create` · `maint.permit.view` · `maint.pm.manage` · `maint.wo.assign` · `maint.wo.cancel` · `maint.wo.close` · `maint.wo.create` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.view` · `prod.log.view` · `report.export` · `report.view` · `sync.pull` · `sync.push` · `wh.item.view` · `wh.req.approve` · `wh.req.create` · `wh.return` |
-| فني صيانة (ميداني) (FIELD_TECHNICIAN) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.form.create` · `lab.result.enter` · `lab.sample.create` · `maint.asset.view` · `maint.condition.record` · `maint.permit.create` · `maint.permit.view` · `maint.wo.close` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.create` · `prod.log.view` · `sync.pull` · `sync.push` · `wh.req.create` · `wh.return` |
+| فني صيانة (ميداني) (FIELD_TECHNICIAN) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.form.create` · `lab.result.enter` · `lab.result.view` · `lab.sample.create` · `lab.sample.view` · `maint.asset.view` · `maint.condition.record` · `maint.permit.create` · `maint.permit.view` · `maint.wo.close` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.create` · `prod.log.view` · `sync.pull` · `sync.push` · `wh.req.create` · `wh.return` |
 | مسؤول السلامة (HSE_OFFICER) | DEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `maint.permit.approve` · `maint.permit.view` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.log.view` · `sync.pull` · `sync.push` |
 
 #### شعبة المعدات الدوارة — `MAINT-ROT`
@@ -62,7 +62,7 @@
 | الدور | النطاق | الصلاحيات |
 |---|---|---|
 | رئيس الشعبة (SECTION_HEAD) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.emp.view` · `hr.form.view` · `hr.leave.approve` · `hr.shift.view` · `maint.asset.manage` · `maint.asset.view` · `maint.backlog.view` · `maint.condition.record` · `maint.condition.view` · `maint.downtime.verify` · `maint.permit.approve` · `maint.permit.create` · `maint.permit.view` · `maint.pm.manage` · `maint.wo.assign` · `maint.wo.cancel` · `maint.wo.close` · `maint.wo.create` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.view` · `prod.log.view` · `report.export` · `report.view` · `sync.pull` · `sync.push` · `wh.item.view` · `wh.req.approve` · `wh.req.create` · `wh.return` |
-| فني صيانة (ميداني) (FIELD_TECHNICIAN) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.form.create` · `maint.asset.view` · `maint.condition.record` · `maint.permit.create` · `maint.permit.view` · `maint.wo.close` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.create` · `prod.log.view` · `sync.pull` · `sync.push` · `wh.req.create` · `wh.return` |
+| فني صيانة (ميداني) (FIELD_TECHNICIAN) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.form.create` · `lab.sample.view` · `maint.asset.view` · `maint.condition.record` · `maint.permit.create` · `maint.permit.view` · `maint.wo.close` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.create` · `prod.log.view` · `sync.pull` · `sync.push` · `wh.req.create` · `wh.return` |
 
 #### شعبة الكهرباء — `MAINT-ELEC`
 
@@ -71,7 +71,7 @@
 | الدور | النطاق | الصلاحيات |
 |---|---|---|
 | رئيس الشعبة (SECTION_HEAD) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.emp.view` · `hr.form.view` · `hr.leave.approve` · `hr.shift.view` · `maint.asset.manage` · `maint.asset.view` · `maint.backlog.view` · `maint.condition.record` · `maint.condition.view` · `maint.downtime.verify` · `maint.permit.approve` · `maint.permit.create` · `maint.permit.view` · `maint.pm.manage` · `maint.wo.assign` · `maint.wo.cancel` · `maint.wo.close` · `maint.wo.create` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.view` · `prod.log.view` · `report.export` · `report.view` · `sync.pull` · `sync.push` · `wh.item.view` · `wh.req.approve` · `wh.req.create` · `wh.return` |
-| فني صيانة (ميداني) (FIELD_TECHNICIAN) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.form.create` · `maint.asset.view` · `maint.condition.record` · `maint.permit.approve` · `maint.permit.create` · `maint.permit.view` · `maint.wo.close` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.create` · `prod.log.view` · `sync.pull` · `sync.push` · `wh.req.create` · `wh.return` |
+| فني صيانة (ميداني) (FIELD_TECHNICIAN) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.form.create` · `lab.sample.view` · `maint.asset.view` · `maint.condition.record` · `maint.permit.approve` · `maint.permit.create` · `maint.permit.view` · `maint.wo.close` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.create` · `prod.log.view` · `sync.pull` · `sync.push` · `wh.req.create` · `wh.return` |
 
 #### شعبة الصمامات — `MAINT-VALVE`
 
@@ -80,7 +80,7 @@
 | الدور | النطاق | الصلاحيات |
 |---|---|---|
 | رئيس الشعبة (SECTION_HEAD) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.emp.view` · `hr.form.view` · `hr.leave.approve` · `hr.shift.view` · `maint.asset.manage` · `maint.asset.view` · `maint.backlog.view` · `maint.condition.record` · `maint.condition.view` · `maint.downtime.verify` · `maint.permit.approve` · `maint.permit.create` · `maint.permit.view` · `maint.pm.manage` · `maint.wo.assign` · `maint.wo.cancel` · `maint.wo.close` · `maint.wo.create` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.view` · `prod.log.view` · `report.export` · `report.view` · `sync.pull` · `sync.push` · `wh.item.view` · `wh.req.approve` · `wh.req.create` · `wh.return` |
-| فني صيانة (ميداني) (FIELD_TECHNICIAN) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.form.create` · `maint.asset.view` · `maint.condition.record` · `maint.permit.create` · `maint.permit.view` · `maint.wo.close` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.create` · `prod.log.view` · `sync.pull` · `sync.push` · `wh.req.create` · `wh.return` |
+| فني صيانة (ميداني) (FIELD_TECHNICIAN) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.form.create` · `lab.sample.view` · `maint.asset.view` · `maint.condition.record` · `maint.permit.create` · `maint.permit.view` · `maint.wo.close` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.create` · `prod.log.view` · `sync.pull` · `sync.push` · `wh.req.create` · `wh.return` |
 
 #### شعبة الآلات الدقيقة — `MAINT-INST`
 
@@ -89,7 +89,7 @@
 | الدور | النطاق | الصلاحيات |
 |---|---|---|
 | رئيس الشعبة (SECTION_HEAD) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.emp.view` · `hr.form.view` · `hr.leave.approve` · `hr.shift.view` · `maint.asset.manage` · `maint.asset.view` · `maint.backlog.view` · `maint.condition.record` · `maint.condition.view` · `maint.downtime.verify` · `maint.permit.approve` · `maint.permit.create` · `maint.permit.view` · `maint.pm.manage` · `maint.wo.assign` · `maint.wo.cancel` · `maint.wo.close` · `maint.wo.create` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.view` · `prod.log.view` · `report.export` · `report.view` · `sync.pull` · `sync.push` · `wh.item.view` · `wh.req.approve` · `wh.req.create` · `wh.return` |
-| فني صيانة (ميداني) (FIELD_TECHNICIAN) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.form.create` · `maint.asset.view` · `maint.condition.record` · `maint.permit.create` · `maint.permit.view` · `maint.wo.close` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.create` · `prod.log.view` · `sync.pull` · `sync.push` · `wh.req.create` · `wh.return` |
+| فني صيانة (ميداني) (FIELD_TECHNICIAN) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.form.create` · `lab.sample.view` · `maint.asset.view` · `maint.condition.record` · `maint.permit.create` · `maint.permit.view` · `maint.wo.close` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.create` · `prod.log.view` · `sync.pull` · `sync.push` · `wh.req.create` · `wh.return` |
 
 #### شعبة المعدات العامة — `MAINT-GEN`
 
@@ -98,7 +98,7 @@
 | الدور | النطاق | الصلاحيات |
 |---|---|---|
 | رئيس الشعبة (SECTION_HEAD) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.emp.view` · `hr.form.view` · `hr.leave.approve` · `hr.shift.view` · `maint.asset.manage` · `maint.asset.view` · `maint.backlog.view` · `maint.condition.record` · `maint.condition.view` · `maint.downtime.verify` · `maint.permit.approve` · `maint.permit.create` · `maint.permit.view` · `maint.pm.manage` · `maint.wo.assign` · `maint.wo.cancel` · `maint.wo.close` · `maint.wo.create` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.view` · `prod.log.view` · `report.export` · `report.view` · `sync.pull` · `sync.push` · `wh.item.view` · `wh.req.approve` · `wh.req.create` · `wh.return` |
-| فني صيانة (ميداني) (FIELD_TECHNICIAN) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.form.create` · `maint.asset.view` · `maint.condition.record` · `maint.permit.create` · `maint.permit.view` · `maint.wo.close` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.create` · `prod.log.view` · `sync.pull` · `sync.push` · `wh.req.create` · `wh.return` |
+| فني صيانة (ميداني) (FIELD_TECHNICIAN) | SUBDEPT | `auth.login` · `doc.upload` · `doc.view` · `hr.att.view` · `hr.form.create` · `lab.sample.view` · `maint.asset.view` · `maint.condition.record` · `maint.permit.create` · `maint.permit.view` · `maint.wo.close` · `maint.wo.execute` · `maint.wo.view` · `notif.view` · `org.dept.view` · `prod.downtime.create` · `prod.log.view` · `sync.pull` · `sync.push` · `wh.req.create` · `wh.return` |
 
 
 ### الأقسام الإدارية (Administrative Sections)
@@ -140,12 +140,12 @@
 | الدور | النطاق | الصلاحيات |
 |---|---|---|
 | مدير النظام (SYS_ADMIN) | ALL | `admin.system` · `audit.export` · `audit.view` · `auth.login` · `doc.manage` · `hr.emp.view` · `notif.view` · `org.dept.manage` · `org.dept.view` · `org.role.manage` · `org.user.manage` · `org.user.view` · `report.kpi.manage` · `sync.pull` |
-| مدير المعمل/المشروع (PLANT_MANAGER) | ALL | `audit.view` · `com.order.view` · `doc.manage` · `fin.budget.view` · `fin.cost.view` · `fin.po.approve` · `hr.att.all` · `hr.leave.approve` · `hr.shift.view` · `lab.result.verify` · `maint.asset.view` · `maint.backlog.view` · `maint.permit.approve` · `maint.wo.assign` · `maint.wo.close` · `maint.wo.view` · `org.delegation.manage` · `prod.log.approve` · `report.export` · `report.kpi.manage` · `report.view` |
-| رئيس القسم (DEPT_MANAGER) | DEPT | `audit.view` · `auth.login` · `com.order.confirm` · `doc.upload` · `doc.view` · `fin.budget.view` · `fin.cost.view` · `hr.att.correct` · `hr.form.view` · `hr.leave.approve` · `hr.shift.manage` · `maint.asset.manage` · `maint.backlog.view` · `maint.downtime.verify` · `maint.permit.approve` · `maint.pm.manage` · `maint.wo.assign` · `maint.wo.cancel` · `maint.wo.close` · `notif.view` · `org.dept.view` · `prod.downtime.view` · `prod.log.approve` · `prod.param.view` · `report.export` · `report.view` · `sync.pull` · `sync.push` · `wh.grn` · `wh.issue` · `wh.manage` · `wh.req.approve` · `wh.stocktake` |
-| مسؤول السلامة (HSE_OFFICER) | ALL | `auth.login` · `doc.upload` · `lab.oos.manage` · `maint.permit.approve` · `maint.permit.view` · `maint.wo.view` · `notif.view` · `prod.downtime.view` · `report.view` · `sync.pull` · `sync.push` |
+| مدير المعمل/المشروع (PLANT_MANAGER) | ALL | `audit.view` · `com.order.view` · `doc.manage` · `fin.budget.view` · `fin.cost.view` · `fin.po.approve` · `hr.att.all` · `hr.leave.approve` · `hr.shift.view` · `lab.oos.view` · `lab.result.verify` · `lab.result.view` · `lab.sample.view` · `maint.asset.view` · `maint.backlog.view` · `maint.permit.approve` · `maint.wo.assign` · `maint.wo.close` · `maint.wo.view` · `org.delegation.manage` · `prod.log.approve` · `report.export` · `report.kpi.manage` · `report.view` |
+| رئيس القسم (DEPT_MANAGER) | DEPT | `audit.view` · `auth.login` · `com.order.confirm` · `doc.upload` · `doc.view` · `fin.budget.view` · `fin.cost.view` · `hr.att.correct` · `hr.form.view` · `hr.leave.approve` · `hr.shift.manage` · `lab.result.view` · `lab.sample.view` · `maint.asset.manage` · `maint.backlog.view` · `maint.downtime.verify` · `maint.permit.approve` · `maint.pm.manage` · `maint.wo.assign` · `maint.wo.cancel` · `maint.wo.close` · `notif.view` · `org.dept.view` · `prod.downtime.view` · `prod.log.approve` · `prod.param.view` · `report.export` · `report.view` · `sync.pull` · `sync.push` · `wh.grn` · `wh.issue` · `wh.manage` · `wh.req.approve` · `wh.stocktake` |
+| مسؤول السلامة (HSE_OFFICER) | ALL | `auth.login` · `doc.upload` · `lab.oos.manage` · `lab.oos.view` · `lab.result.view` · `maint.permit.approve` · `maint.permit.view` · `maint.wo.view` · `notif.view` · `prod.downtime.view` · `report.view` · `sync.pull` · `sync.push` |
 | مسؤول الوثائق (DOC_CONTROLLER) | ALL | `admin.system` · `auth.login` · `doc.manage` · `doc.upload` · `doc.view` · `notif.view` · `report.export` · `sync.pull` |
 | مخطط صيانة (PLANNER) | DEPT | `auth.login` · `fin.cost.view` · `maint.backlog.view` · `maint.condition.view` · `maint.pm.manage` · `maint.wo.assign` · `maint.wo.view` · `notif.view` · `prod.downtime.view` · `report.export` · `report.view` · `sync.pull` · `sync.push` · `wh.item.view` · `wh.req.approve` |
-| مستخدم عرض فقط (READONLY_GUEST) | DEPT | `auth.login` · `com.order.view` · `fin.budget.view` · `maint.backlog.view` · `maint.wo.view` · `notif.view` · `prod.log.view` · `prod.param.view` · `report.view` · `wh.item.view` |
+| مستخدم عرض فقط (READONLY_GUEST) | DEPT | `auth.login` · `com.order.view` · `fin.budget.view` · `lab.result.view` · `lab.sample.view` · `maint.backlog.view` · `maint.wo.view` · `notif.view` · `prod.log.view` · `prod.param.view` · `report.view` · `wh.item.view` |
 
 ### الصلاحيات المعرّفة غير الممنوحة (مراجعة)
 
@@ -162,7 +162,7 @@
 - **doc**: 3 صلاحية
 - **fin**: 13 صلاحية
 - **hr**: 11 صلاحية
-- **lab**: 5 صلاحية
+- **lab**: 8 صلاحية
 - **maint**: 16 صلاحية
 - **notif**: 1 صلاحية
 - **org**: 2 صلاحية

@@ -274,6 +274,51 @@ async function main() {
     }
   }
 
+  // ── 5ب) دليل المختبر: المُعامِلات ومواصفاتها السارية ─────────────────────────
+  // بيانات مرجعية (لا تُعلَّم DEMO): بدونها لا يمكن حساب isOutOfSpec ولا إصدار شهادة.
+  // القاعدة المطبَّقة في LabService: productCode = رمز وحدة الإنتاج، وgrade = TECHNICAL،
+  // وأحدث effectiveFrom ≤ وقت جمع العينة هو النافذ (حتى لا تتغير شهادة سابقة بتعديل المواصفة).
+  const labParameters: Array<{ code: string; nameAr: string; unit: string; method: string; appliesTo: string; min: number | null; max: number | null }> = [
+    { code: 'UREA_N', nameAr: 'نسبة النيتروجين', unit: '%', method: 'Kjeldahl', appliesTo: 'UREA', min: 46.0, max: 46.4 },
+    { code: 'UREA_BIURET', nameAr: 'البيوريت', unit: '%', method: 'Spectrophotometry', appliesTo: 'UREA', min: null, max: 1.0 },
+    { code: 'UREA_MOISTURE', nameAr: 'الرطوبة', unit: '%', method: 'Karl Fischer', appliesTo: 'UREA', min: null, max: 0.5 },
+    { code: 'UREA_SIZE', nameAr: 'متوسط حجم الحبيبات', unit: 'mm', method: 'Sieve', appliesTo: 'UREA', min: 2.0, max: 4.0 },
+    { code: 'AMM_PURITY', nameAr: 'نقاء الأمونيا', unit: '%', method: 'Titration', appliesTo: 'AMMONIA', min: 99.5, max: null },
+    { code: 'AMM_OIL', nameAr: 'محتوى الزيت', unit: 'mg/kg', method: 'Gravimetric', appliesTo: 'AMMONIA', min: null, max: 5 },
+    { code: 'BFW_PH', nameAr: 'درجة حموضة ماء المرجل', unit: 'pH', method: 'Electrode', appliesTo: 'UTILITY', min: 8.8, max: 9.3 },
+    { code: 'BFW_CONDUCTIVITY', nameAr: 'موصلية ماء المرجل', unit: 'µS/cm', method: 'Cell', appliesTo: 'UTILITY', min: null, max: 1.5 },
+    { code: 'CW_CONDUCTIVITY', nameAr: 'موصلية ماء التبريد', unit: 'µS/cm', method: 'Cell', appliesTo: 'COOLING_TOWER', min: null, max: 2500 },
+    { code: 'CW_TURBIDITY', nameAr: 'عكارة ماء التبريد', unit: 'NTU', method: 'Nephelometric', appliesTo: 'COOLING_TOWER', min: null, max: 15 },
+  ];
+  for (const lp of labParameters) {
+    await prisma.labParameter.upsert({
+      where: { code: lp.code },
+      update: { nameAr: lp.nameAr, unit: lp.unit, method: lp.method, appliesTo: lp.appliesTo, specMin: lp.min, specMax: lp.max },
+      create: { code: lp.code, nameAr: lp.nameAr, unit: lp.unit, method: lp.method, appliesTo: lp.appliesTo, specMin: lp.min, specMax: lp.max },
+    });
+    const param = await prisma.labParameter.findUnique({ where: { code: lp.code }, select: { id: true } });
+    if (!param) continue;
+    await prisma.labSpec.upsert({
+      where: {
+        parameterId_productCode_grade_effectiveFrom: {
+          parameterId: param.id,
+          productCode: lp.appliesTo,
+          grade: 'TECHNICAL',
+          effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      },
+      update: { minVal: lp.min, maxVal: lp.max },
+      create: {
+        parameterId: param.id,
+        productCode: lp.appliesTo,
+        grade: 'TECHNICAL',
+        minVal: lp.min,
+        maxVal: lp.max,
+        effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    });
+  }
+
   // ── 6) سجل sync_entity_registry (يطابق SYNC_META في الدومين) ────────────────
   const tableToEntity = new Map<string, { entity: string; merge: string; priority: number }>();
   for (const meta of Object.values(SYNC_META)) {

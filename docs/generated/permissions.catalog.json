@@ -181,6 +181,33 @@
       "offlineCapable": true
     },
     {
+      "code": "lab.sample.view",
+      "module": "lab",
+      "action": "sample",
+      "nameAr": "عرض العينات وطلبات التحليل",
+      "nameEn": "View samples & test requests",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "lab.result.view",
+      "module": "lab",
+      "action": "result",
+      "nameAr": "عرض نتائج التحاليل ومطابقتها للمواصفة",
+      "nameEn": "View results against specification",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
+      "code": "lab.oos.view",
+      "module": "lab",
+      "action": "oos",
+      "nameAr": "متابعة حالات خارج المطابقة (OOS/CAPA)",
+      "nameEn": "View OOS/CAPA cases",
+      "maxScope": "ALL",
+      "offlineCapable": false
+    },
+    {
       "code": "lab.sample.create",
       "module": "lab",
       "action": "sample",
