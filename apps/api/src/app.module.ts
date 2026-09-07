@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './common/prisma.service.js';
 import { AuthModule } from './security/auth.module.js';
 import { AccessGuard } from './security/access.guard.js';
@@ -11,6 +11,7 @@ import { TimeModule } from './time/attendance.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { HealthController } from './health/health.controller.js';
 import { RateLimitGuard } from './common/rate-limit.guard.js';
+import { ErrorContractFilter } from './common/error-contract.filter.js';
 
 /**
  * وحدات الخدمة النواة (Modular Monolith).
@@ -32,6 +33,8 @@ import { RateLimitGuard } from './common/rate-limit.guard.js';
   providers: [
     { provide: APP_GUARD, useClass: RateLimitGuard }, // 1) حد المعدن/منع التخمين
     { provide: APP_GUARD, useClass: AccessGuard }, // 2) المصادقة + الصلاحيات
+    // 3) عقد موحّد للأخطاء: رسالة عربية + errorId للبحث في السجل، وكتمان تفاصيل 5xx عن العميل
+    { provide: APP_FILTER, useClass: ErrorContractFilter },
   ],
 })
 export class AppModule {}

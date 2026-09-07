@@ -26,13 +26,14 @@ newport-ms/
 ├── packages/domain/          # ❤️ مصدر الحقيقة: الهيكل، 91 صلاحية، 21 دورًا، مصفوفة الوصول،
 │                             #    آلة حالة أوامر العمل، عقد المزامنة v3، DTOs بـ Zod، محرّك الحضور
 │   ├── src/{org,permissions,roles,workorder,sync,client,dto,attendance,perm,matrix}.ts
-│   ├── tests/*.spec.ts       # 48 اختبار وحدة (كلها خضراء)
+│   ├── tests/*.spec.ts       # 51 اختبار وحدة (كلها خضراء)
 │   └── scripts/gen-matrix.ts # يولّد docs/generated/permissions.matrix.{json,md}
 ├── apps/api/                 # NestJS 11: الأمان، التنظيم، الصيانة، الإنتاج، المختبر، البصمة، المزامنة، التدقيق
 │   ├── prisma/schema.prisma  # 85 نموذج + 25 enum → docs/generated/schema.postgres.sql
 │   ├── prisma/migrations/…   # الامتدادات + التسلسلات + RLS + change-log triggers (SQL يدوي)
 │   ├── prisma/seed.ts        # seed idempotent للهيكل + المصفوفة + 23 مستخدمًا
-│   └── test/access-sync.spec.ts  # 16 اختبار على طبقتي الأمان والمزامنة
+│   └── test/*.spec.ts        # 32 اختبارًا: الأمان+المزامنة، تعاقد المخطط، المؤجّلات على قاعدة حيّة،
+│                             #    تسلسل BigInt، عقد الأخطاء
 ├── apps/desktop/             # Electron + React 19 (Dexie/IndexedDB فوق SyncClient)
 ├── apps/mobile/              # Expo 57 + React Native (SQLite فوق SyncClient نفسه)
 ├── docs/                     # هذه الوثائق
@@ -43,48 +44,54 @@ newport-ms/
 
 ## 3. لماذا PostgreSQL على وجه التحديد
 
-1. **Row-Level Security**: سياسة `dept_scope_policy` تقرأ `app.scope_kind / app.subdept_id / app.dept_id / app.user_id` المضبوطة عبر `PrismaService.withScope()` (`set_config(..., true)` داخل معاملة). حتى لو نسي استعلامٌ فلترة النطاق، القاعدة لا تُسرّب صفوفًا خارج النطاق.
+1. **Row-Level Security**: السياسات `p_wo_scope` و`p_slog_scope` و`p_punch_scope` و`p_je_finance` (مع `FORCE ROW LEVEL SECURITY`) تقرأ `app.scope_kind / app.subdept_id / app.dept_id / app.user_id` المضبوطة عبر `PrismaService.withScope()` (`set_config(..., true)` داخل معاملة). حتى لو نسي استعلامٌ فلترة النطاق، القاعدة لا تُسرّب صفوفًا خارج النطاق.
 2. **`jsonb` + GIN** للنماذج الميدانية (قراءات الجولة، `exceptionsJson`، `changes` في سجل التدقيق) دون تفكيك الجدول إلى EAV.
 3. **التسلسلات + `nextval`** لرقم أمر العمل (`WO-2026-000123`) في نفس المعاملة — لا تنافس على `MAX(id)+1` ولا فجوات عند rollback.
-4. **DDL المولّد قابل للتدقيق**: `docs/generated/schema.postgres.sql` (2286 سطرًا، 85 جدولًا، 93 مفتاحًا خارجيًا، 145 فهرسًا) يراجعه مسؤولو المعمل قبل التنفيذ.
+4. **DDL المولّد قابل للتدقيق**: `docs/generated/schema.postgres.sql` (2288 سطرًا: 85 جدولًا، 93 مفتاحًا خارجيًا، 145 فهرسًا — منها 97 غير مفاتيح) يراجعه مسؤولو المعمل قبل التنفيذ.
 5. **التقييمات العددية للحضور** تحتاج أرقامًا دقيقة: `workedMinutes/overtimeMinutes` أعداد صحيحة بالدقائق، والرواتب تُجمَّع شهريًا من `attendance_daily_summary` لا من `attendance_punches`.
 
 ### قرارات تصميمية داخل المخطط
-- **الأسماء**: `@@map` يحوّل اسم الجدول إلى snake_case، لكن الأعمدة تبقى camelCase → أي SQL خام يجب أن يكتب `"subDeptId"` بين علامتي اقتباس. (انضمّت 19 قيد CHECK بترقيم camelCase إلى ترحيل الامتدادات لهذا السبب.)
+- **الأسماء**: `@@map` يحوّل اسم الجدول إلى snake_case، لكن الأعمدة تبقى camelCase → أي SQL خام يجب أن يكتب `"subDeptId"` بين علامتي اقتباس. (انضمّت 23 قيد CHECK باسم `ck_*` إلى ترحيل الامتدادات لهذا السبب.)
 - **كل جدول قابل للمزامنة** يحمل: `version` (int، يزيد على الخادم)، `syncSeq` (bigint، تسلسل التغيير)، `deletedAt` (حذف منطقي)، `clientOpId` (آخر عملية دفع).
-- **الجداول الحدثية append-only**: `work_order_logs`, `attendance_punches`, `sync_change_log`, `audit_trail` — الحذف ممنوع عليها حتى من مدير النظام (يُراجَع في `sync-engine.service` + قيد في القاعدة).
+- **الجداول الحدثية append-only**: `wo_logs`, `attendance_punches`, `sync_change_log`, `audit_trails` — الحذف ممنوع عليها حتى من مدير النظام (يُراجَع في `sync-engine.service` + قيد في القاعدة).
 
 ## 4. المزامنة بين المكتب والموبايل — التصميم المختار
 
 البروتوكول **v3** (رقمه `SCHEMA_VERSION = 3`)، وهو delta sync باتجاهين مع cursor:
 
-| الاتجاه | القناة | العقد |
+| الاتجاه | القناة | العقد (مطابق لـ `packages/domain/src/dto.ts`) |
 |---|---|---|
-| دفع (Device → Server) | `POST /api/v1/sync/push` | `{ deviceId, userId, schemaVersion, ops[] }` → `{ nextCursor, results[] }`، وكل عملية لها `opId` (idempotency) و`baseVersion` (قفل تفاؤلي) |
-| سحب (Server → Device) | `GET /api/v1/sync/pull?deviceId&sinceCursor&entities&limit` | `{ cursor, hasMore, changes[], fullResyncRequired? }` من `sync_change_log` |
-| تخطيط الدفع | `POST /api/v1/sync/batch-plan` | تقسيم الطابور حسب `pushPriority` (200 عملية/دفعة) |
-| فحص التعاقد | `GET /api/v1/sync/protocol` | يعيد إصدار المخطط وقائمة الكيانات الـ20 وسياسة الدمج لكل كيان |
+| دفع (Device → Server) | `POST /api/v1/sync/push` | طلب: `{ deviceId, userId, schemaVersion, ops[] ≤500 }` وكل عملية `{ opId, entity, recordId, kind: UPSERT\|PATCH\|DELETE, data?, baseVersion?, clientTimestamp, localWarnings? }` → استجابة: `{ serverTime, nextCursor, results[] }` |
+| سحب (Server → Device) | `GET /api/v1/sync/pull?deviceId&sinceCursor&entities&limit` | `{ serverTime, cursor, hasMore, changes[{seq,entity,recordId,version,deleted,data}] }` من `sync_change_log`؛ وعند فجوة > 500k تسلسل: `{ changes: [], fullResyncRequired: true, resyncReasonAr }` |
+| تخطيط الدفع | `POST /api/v1/sync/batch-plan` | `{ ops, maxBatch?=200 }` → `{ batches: opId[][] }` مرتبة بـ `pushPriority` |
+| فحص التعاقد | `GET /api/v1/sync/protocol` | `{ schemaVersion, maxOpsPerPush, maxRowsPerPull, changeLogRetentionDays, serverTime, timezone, entities[{entity, table, merge, pushPriority}] }` |
 
-**الكيانات القابلة للمزامنة (20):**
-`workOrder, workOrderLog, woAttachment, laborEntry, partIssue, shiftLog, processParam, downtime, alarmAck, labSample, labResult, permit, asset, assetReading, pmPlanInstance, attendancePunch, leaveRequest, mobileFormRecord, document, notificationAck`
+> `userId` مطلوب في الطلب لكنه **يُستبدل** بمعرّف جلسة الـJWT في المتحكم (`{ ...body, userId: access.userId }`)،
+> فلا يستطيع جهاز أن ينتحل مستخدمًا آخر.
 
-**سياسة الدمج لكل كيان** (`SYNC_META[*].merge`):
-- `field_merge` — أوامر العمل وسجلات الوردية: حقول الخادم المحمية (`status`, `approvedById`, …) تُحسم للخادم، وحقول الميدان الحرة تُدمج، وحقول الملاحظات (`appendFields`) **تُلحق** ولا تستبدل (سطرًا سطرًا، بلا تكرار).
-- `append_only` — السجلات الحدثية: تُقبل كما هي، والعميل لا يستطيع حذفها.
-- `server_wins` — `asset`, `pmPlanInstance`: الخادم مصدر الحقيقة؛ لا يُقبل تعديل الجهاز (يُبلَّغ التعارض للمستخدم).
-- `reject` — `attendancePunch` القادم من غير أجهزة البصمة المعتمدة: يُولَّد تعارض للمراجعة اليدوية.
+**الكيانات القابلة للمزامنة (19)** — قاعدة صارمة: **جدول واحد = كيان مزامنة واحد**. الصور والمرفقات
+لا تُخزَّن كحقول على صفوف العمل بل تُدفع كعمليات `document` (بفهرسة `entityType`+`entityId`)؛ ولهذا حُذف
+الكيان `woAttachment` الذي كان يضاعف دفعة التغييرات على جدول `documents`.
+
+| استراتيجية الدمج | الكيانات (من `SYNC_META`) |
+|---|---|
+| `field_merge` (6) | `workOrder` (محمي: `status, approverId, partsCost, laborCost, contractorCost, assetId, targetEndAt`؛ مُلحَق: `description`) · `shiftLog` (محمي: `status, approvedById, approvedAt`؛ مُلحَق: `notes, eventsJson`) · `downtime` · `labSample` · `labResult` · `leaveRequest` |
+| `append_only` (9) | `workOrderLog` · `laborEntry` · `processParam` · `alarmAck` · `assetReading` · `attendancePunch` · `mobileFormRecord` · `document` · `notificationAck` — تُقبل كما هي، والحذف مرفوض من العميل |
+| `server_wins` (2) | `asset` · `pmPlanInstance` — الخادم مصدر الحقيقة؛ لا يُولّد الجهاز مواعيد PM |
+| `reject` (2) | `partIssue` (يمسّ المخزون) · `permit` (تصريح عمل — السلامة لا تحتمل دمجًا) — يُبلَّغ التعارض للمراجعة |
 
 **سلوكيات حاسمة موثّقة ومُختبَرة:**
-- **Idempotency**: إعادة إرسال نفس `opId` (بعد انقطاع/إعادة تشغيل) تُرجع نفس رد الخادم من `sync_idempotency` وتُعلَّم `DEDUPLICATED` — لا تكرار ولا فقدان.
+- **Idempotency**: إعادة إرسال نفس `opId` (بعد انقطاع/إعادة تشغيل) تُرجع **نفس رد الخادم الأصلي حرفيًا** (outcome/`serverSeq`/`serverKeptFields`) المحفوظ في `sync_idempotency`، مع `reasonAr` يوضح أنها إعادة إرسال — لا تكرار ولا فقدان ولا «نتيجة مختلفة».
 - **حقول الهوية لا تُؤخذ من العميل**: `facilityId/departmentId/subDeptId/createdById/approvedById/passwordHash/…` في `DENIED_COLUMNS`؛ أي محاولة لفرضها تُسجَّل في `sync_conflicts` بسبب `SERVER_STAMPED` (اختبار مغطّى).
 - **إعادة مزامنة كاملة** عندما يتغيّر `schemaVersion` أو يتجاوز الفرق في `sync_change_log` مدة الاحتفاظ (500k تسلسل) → `fullResyncRequired: true` (HTTP 409 على الدفع).
 - **بلا شبكة**: الكتابة المحلية في Dexie/SQLite ناجحة فورًا، والطابور يبقى؛ عند أول اتصال تُدفع الدفعات بالأولوية، والجهاز لا يفقد مدخلًا واحدًا (مُغطّى باختبار "survives a network outage").
 
 ## 5. الأمان والموثّقية التشغيلية
 
-- **الجلسات**: وصول JWT (`sub`, `v` = نسخة المستخدم، `dev` = معرّف الجهاز) + Refresh مخزَّن كـ SHA-256، دوّار مع **إلغاء العائلة كاملة** عند إعادة استعمال رمز قديم؛ `mustChangePwd` يفرض تغيير كلمة المرور.
+- **الجلسات**: وصول JWT (`sub`, `v` = نسخة المستخدم، `dev` = معرّف الجهاز) + Refresh مخزَّن كـ SHA-256، دوّار مع **إلغاء العائلة كاملة** عند إعادة استعمال رمز قديم.
+- **تغيير كلمة المرور الأولى**: الحسابات المزروعة تولد بـ `mustChangePwd=true`؛ الجلسة **تُصدَر** (لا يُغلق النظام على المستخدم) لكن `AccessGuard` يقيّدها بمسارات الحساب (`auth/me`, `auth/change-password`, `auth/logout`) حتى يغيّرها، وإلا `403` برسالة عربية وحقل `changePasswordRequired:true`.
 - **حماية من التخمين**: 5 محاولات خاطئة ⇒ قفل 15 دقيقة؛ حدّ معدل لكل IP (login 5/0.1 rps، refresh 20/1، push 30/2، pull 60/5) عبر `RateLimitGuard` داخل الذاكرة (يستبدَل بـ Redis عند تعدّد النسخ).
-- **تدقيق غير قابل للتعديل**: `audit_trail` append-only، تكتبه كل العمليات الحساسة (دخول، اعتماد، إغلاق أمر عمل، تغيير دور، قرارات التعارض).
+- **تدقيق غير قابل للتعديل**: `audit_trails` append-only (بمؤجّل `trg_audit_immutable`) + محاولات الرفض `DENIED` تُسجَّل، تكتبه كل العمليات الحساسة (دخول، اعتماد، إغلاق أمر عمل، تغيير دور، قرارات التعارض).
 - **قراءة البصمة محمية**: `hr.biometric.manage` وحده يعطي صلاحية تعديل بصمات الآخرين؛ الطلبات العادية لا تصل إليها (RLS + `privileged.biometric`).
 
 ## 6. حدود الحل الحالية (بلا تجميل)
@@ -93,7 +100,7 @@ newport-ms/
 2. **تخزين المستندات**: `CONFIG.storage` يصف minio/s3/local، لكن قناة presigned upload غير منفّذة — المرفقات حاليًا تمر كـ `dataUrl` صغيرة عبر المزامنة؛ يجب إضافة رفع مباشر قبل أي استخدام بكميات كبيرة.
 3. **تكامل SAP/ERP**: `integration_configs` مع `credentialRef` موجود، والمزامنة ثنائية الاتجاه للطلبات/الفواتير غير منفّذة.
 4. **حدود المعدل داخلية الذاكرة**: صالحة لنسخة خادم واحدة؛ مع أكثر من نسخة يلزم Redis.
-5. **`src/lab/` فارغة**: منطق المختبر منفّذ داخل `production`/`workorder` وحزمة `domain`، ولا توجد وحدة Nest مستقلة له بعد.
+5. **لا وحدة `lab` في `apps/api/src`**: عينات/نتائج المختبر تُزرع وتُسحب عبر محرك المزامنة (`labSample`, `labResult`) وتُقيَّد بسياسات الصلاحية، لكن لا توجد REST routes لشهادات OOS/CAPA بعد — أول بند في المرحلة 1ب (`docs/05` §12).
 6. **`pg_stat_statements`** يحتاج `shared_preload_libraries` (مضبوط في docker-compose)؛ على تثبيت PostgreSQL يدوي يُضاف في `postgresql.conf` قبل إنشاء الامتداد.
 
 ## 7. أوامر التحقق (كلها تعمل في المستودع)
@@ -101,12 +108,16 @@ newport-ms/
 ```bash
 npm ci
 npm run build -w @newport/domain
-npm run test -w @newport/domain      # 48 اختبار: صلاحيات، مصفوفة، WO FSM، تعاقد المزامنة، طبقة العميل
+npm run test -w @newport/domain      # 51 اختبارًا: صلاحيات، مصفوفة، WO FSM، تعاقد المزامنة، طبقة العميل
 npm run typecheck -w @newport/api     # src + prisma/seed + test (0 أخطاء)
-npm run test -w @newport/api          # 16 اختبار: PermissionService + SyncEngineService على بديل Prisma
+npm run test -w @newport/api          # 32 اختبارًا: الأمان/المزامنة + تعاقد المخطط + المؤجّلات على قاعدة حيّة
 npm run typecheck -w @newport/desktop # tsconfig.json + tsconfig.electron.json
 npm run build -w @newport/desktop     # vite build (حزمة الإنتاج)
 npm run test -w @newport/mobile       # 8 اختبارات: الطابور دون اتصال + مخزن SQLite
+npm run test:all                      # 91 فحصًا (domain 51 + api 32 + mobile 8)
+npm run typecheck:all                 # 4 حِزَم: domain + api + desktop + mobile (0 أخطاء)
+npm run docs:all -w @newport/api      # مصفوفة الوصول + docs/03 + DDL + كتالوج المخطط (كل الوثائق مشتقة من الكود)
+API_URL=http://127.0.0.1:3000/api DATABASE_URL=… npm run e2e -w @newport/api   # 37 فحصًا حيًّا على الخادم
 npm run db:ddl && node apps/api/scripts/gen-schema-docs.mjs   # إعادة توليد المخطط والكتالوج
 ```
 

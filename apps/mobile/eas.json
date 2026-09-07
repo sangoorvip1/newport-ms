@@ -1,0 +1,16 @@
+{
+  "cli": { "version": ">= 13.0.0", "appVersionSource": "local" },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": { "NEWPORT_FACILITY": "BFC-L1" }
+    },
+    "production": {
+      "autoIncrement": true,
+      "android": { "buildType": "app-bundle" },
+      "env": { "NEWPORT_FACILITY": "BFC-L1" }
+    }
+  },
+  "submit": { "production": {} }
+}

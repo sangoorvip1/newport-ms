@@ -6,12 +6,18 @@
     "orientation": "portrait",
     "scheme": "newportfield",
     "userInterfaceStyle": "dark",
-    "locales": { "./assets/locales/ar.json": "./assets/locales/ar.json" },
-    "extra": { "facilityCode": "BFC-L1" },
+    "extra": {
+      "facilityCode": "BFC-L1",
+      "syncIntervalSec": 45
+    },
     "android": {
       "package": "com.newport.field",
-      "permissions": ["CAMERA", "ACCESS_FINE_LOCATION", "INTERNET", "READ_MEDIA_IMAGES"],
-      "adaptiveIcon": { "backgroundColor": "#0f1720" }
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "INTERNET",
+        "READ_MEDIA_IMAGES"
+      ]
     },
     "ios": {
       "bundleIdentifier": "com.newport.field",
@@ -20,7 +26,12 @@
         "NSLocationWhenInUseUsageDescription": "تسجيل موقع الجولة الميدانية مع البصمة الزمنية"
       }
     },
-    "plugins": ["expo-sqlite"],
-    "updates": { "url": "https://updates.newport.local/mobile", "fallbackToCacheTimeout": 0 }
+    "plugins": [
+      "expo-sqlite"
+    ],
+    "updates": {
+      "url": "https://updates.newport.local/mobile",
+      "fallbackToCacheTimeout": 0
+    }
   }
 }

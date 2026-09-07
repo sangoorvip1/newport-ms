@@ -1,17 +1,17 @@
--- ينفَّذ مرة واحدة عند إنشاء الـ volume من الصفر.
--- الامتدادات المطلوبة في مخطط القاعدة + توحيد الترتيب العربي/الإنجليزي.
-CREATE EXTENSION IF NOT EXISTS pg_trgm;      -- بحث نصي (orders/titles)
-CREATE EXTENSION IF NOT EXISTS citext;       -- أسماء مستخدمين/رموز بلا حساسية حالة
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";  -- gen_random_uuid بديل في سكربتات الطوارئ
-CREATE EXTENSION IF NOT EXISTS btree_gin;    -- فهارس composite مع jsonb/text
--- pg_stat_statements يحتاج shared_preload_libraries (مُفعَّل في docker-compose command)
+-- ينفَّذ مرة واحدة عند إنشاء الـ volume من الصفر (docker-entrypoint-initdb.d).
+-- الغرض: ما يلزم خادم القاعدة قبل الترحيل، لا أكثر.
+--
+-- الدقة هنا مقصودة: الترحيل 20260907000001 هو مصدر الحقيقة للامتدادات التي يعتمد عليها المخطط
+-- (pg_trgm, btree_gin, pgcrypto) — ولا نضيف امتدادات «احتياطية» لا يستعملها شيء:
+-- citext و uuid-ossp حُذفا من هذا الملف لأن المخطط لا يستخدم أياً منهما:
+--   * المفاتيح العامة يولّدها Prisma (`@default(uuid(7))` على 80 نموذجًا)، و gen_random_uuid() المستعملة في
+--     sync-engine متاحة مضمّنًا من PostgreSQL 13 (ولا تحتاج uuid-ossp).
+--   * المقارنة غير الحساسة للحالة تُجرى على أعمدة يملؤها التطبيق بقيم معيارية، فلا حاجة إلى citext.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;             -- بحث نصي في العناوين/الأرقام
+CREATE EXTENSION IF NOT EXISTS btree_gin;           -- فهارس composite مع jsonb/text
+CREATE EXTENSION IF NOT EXISTS pgcrypto;            -- gen_random_uuid() + digest()
+-- للأداء فقط (يحتاج shared_preload_libraries المضبوط في docker-compose command)؛ آمن الحذف.
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 
--- فهرس نصي عام للبحث في أوامر العمل (يُنشأ أيضًا في الترحيل؛ مكرر هنا لأمان إعادة الإنشاء)
--- ملاحظة: كل الأسماء camelCase بين علامات اقتباس لأن Prisma @@map يغيّر الجداول فقط.
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'work_orders') THEN
-    EXECUTE $$CREATE INDEX IF NOT EXISTS ix_wo_search_trgm ON work_orders USING gin ((("title" || ' ' || "description") gin_trgm_ops))$$;
-  END IF;
-END $$;
+-- لا فهارس هنا: ix_wo_text_trgm (وكل الفهارس الأخرى) تُنشأ في الترحيل/من Prisma،
+-- وتكرارها في سكربت تهيئة كان سيخالف الاسم الحقيقي ويوحي بوجود فهرس زائد.

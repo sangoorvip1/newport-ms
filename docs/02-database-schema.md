@@ -26,7 +26,7 @@
 | مفاتيح | `String @id @default(uuid(7)) @db.Uuid` | UUIDv7 قابل للترتيب الزمني → إنشاء السجلات من جهاز بلا اتصال لا يتصادم |
 | الحذف | `deletedAt DateTime?` (حذف منطقي) | التقارير الاحتياطية والحسابات لا تفقد سجلًا؛ `wipeRemoteRecords` على الجهاز يحترم الطابور |
 | الطوابع | `createdAt`, `updatedAt @updatedAt` (+ trigger `trg_touch` على القاعدة) | ساعة الخادم هي المرجع، لا ساعة الجهاز |
-| أرقام المستندات | تسلسلات SQL (`wo_number_seq`، `lab_sample_number_seq`، `permit_number_seq`، `grn/mi/req/pr/po/so/si/je/oos/incident`) عبر `next_business_number()` | لا فجوات ولا تنافس؛ تنسيق `WO-2026-000123` |
+| أرقام المستندات | تسلسلات SQL (`wo_number_seq`، `lab_sample_number_seq`، `permit_number_seq`، `grn/mi/req/pr/po/so/si/je/oos/incident`) عبر `next_business_number(seq_name, prefix)` | لا فجوات ولا تنافس؛ تنسيق `WO-2026-000123`؛ تُحاذاة التسلسلات بعد أي استيراد بـ `fn_align_number_sequences()` |
 
 **أعمدة المزامنة الإلزامية** على كل جدول قابل للمزامنة:
 
@@ -129,33 +129,72 @@ BiometricDevice (ZKTeco) ──import──► attendance_punches (@@unique(devi
 
 ## 8. طبقة SQL المضافة (غير قابلة للتعبير في Prisma)
 
-`apps/api/prisma/migrations/20260907000001_postgres_extensions_views_rls/migration.sql` — 376 سطرًا تحتوي:
+`apps/api/prisma/migrations/20260907000001_postgres_extensions_views_rls/migration.sql` — **480 سطرًا** (رقم الملف واسمه ثابت؛ إن تغيّر الترحيل يُحدَّث الوصف) تحتوي:
 
 | العنصر | العدد | الوظيفة |
 |---|---|---|
-| امتدادات | 5 | `pg_trgm`, `citext`, `uuid-ossp`, `btree_gin`, `pg_stat_statements` |
-| تسلسلات أرقام المستندات | 13 | مع دالة `next_business_number(prefix)` |
-| `CREATE SEQUENCE sync_change_log_seq` | 1 | تسلسل Change Feed المشترك (bigint) |
-| دوال/trigger | 5 | `trg_touch` (updatedAt)، `trg_sync_*` (كتابة `sync_change_log`)، `trg_bump_version` (يزيد `version`)، `trg_stamp_entity_seq` (يختم `syncSeq` عبر `sync_entity_registry`)، `trg_audit_immutable` (يمنع UPDATE/DELETE على `audit_trails`) |
-| عرض/ماديات | 4 views | `mv_maintenance_kpi_daily` (MTTR/MTBF/خطة الانصياع)، `mv_production_daily`، `mv_attendance_daily`، `mv_stock_critical` — تُجدَّل تشغيليًا |
-| RLS | 4 policies | `p_wo_scope` (أوامر العمل)، `p_slog_scope` (سجل الوردية)، `p_punch_scope` (البصمة)، `p_je_finance` (القيود المالية) |
-| قيود CHECK | 19 | تحمي تنسيق camelCase/الرموز (مثل `code ~ '^MAINT-[A-Z]+$'`) |
+| امتدادات | 3 | `pg_trgm` (بحث نصي عربي/إنجليزي)، `btree_gin` (فهارس composite مع jsonb/text)، `pgcrypto` (تُستعمل `gen_random_uuid()` في كتابة التعارضات) |
+| تسلسلات أرقام المستندات | 13 | `wo_number_seq`, `lab_sample_number_seq`, `permit_number_seq`, `grn/mi/req/pr/po/so/si/je/oos/incident_number_seq` — مع دالة `next_business_number(seq, prefix)` |
+| تسلسل Change Feed | — | `seq BigInt @id @default(autoincrement())` على `sync_change_log` يُنشئ `sync_change_log_seq_seq` (bigint) في ترحيل Prisma — لا في هذا الترحيل؛ إجمالي التسلسلات في القاعدة الحيّة: **15** (13 مستندًا + Change Feed + `audit_trails_id_seq`) |
+| دوال | 12 | `next_business_number`, `fn_sync_changelog`, `fn_bump_version`, `fn_immutable` (حارس التدقيق), `fn_scope_subdepts` (مساعدة RLS), `touch_updated_at`, `fn_stamp_entity_seq`, **`fn_align_number_sequences()`** (محاذاة التسلسلات بعد أي استيراد/seed)، `fn_wo_backlog_age`, `fn_mtbf_mttr`, `fn_archive_sync_log(p_keep_days int DEFAULT 45)`, `fn_refresh_reports()` |
+| مؤجّلات | 45 | `trg_sync` ×19 (كتابة `sync_change_log` + ختم `syncSeq`)، `trg_bump_version` ×14 (زيادة `version`)، `trg_touch` ×10 (`updatedAt` فقط)، `trg_stamp_entity_seq` ×1، `trg_audit_immutable` ×1 |
+| عرض/ماديات | 4 views | `mv_maintenance_kpi_daily` (MTTR/MTBF/انصياع الصيانة)، `mv_production_daily`، `mv_attendance_daily`، `mv_stock_critical` + فهارس `ux_mv_*` الفريدة (تسمح بـ `REFRESH … CONCURRENTLY`) |
+| RLS | 4 policies | `p_wo_scope`، `p_slog_scope`، `p_punch_scope`، `p_je_finance` — كلها مع `FORCE ROW LEVEL SECURITY` (حتى المالك مقيَّد) |
+| قيود CHECK | 23 | تنسيق الرموز والأرقام وحقلية المنطق (مثل `code ~ '^MAINT-[A-Z]+$'`، `actualEndAt >= actualStartAt`) |
 
-**لماذا تُكتب `syncSeq` من trigger وليس من Prisma؟** لأن المسار الذي يكتبه Prisma يمر بقواعد مختلفة؛ ختم `syncSeq` + `version` في المحرّك يجعل الـ Change Feed صحيحًا حتى للعمليات اليدوية/الإصلاحية (runbook) التي ينفذها DBA.
+**المؤجّلات مشتقّة من `sync_entity_registry` لا من قائمة مكتوبة باليد:** الترحيل يُنشئ الجدول
+`sync_entity_registry(entity, table_name, merge, push_priority)` ويزرعه 19 صفًا، ثم تُبنى منه
+مؤجّلات `trg_sync`/`trg_bump_version`. لذلك لا يمكن أن يعلق مؤجّل على جدول أُلغي كيانه أو أن يُنسى
+جدول جديد — وهذه بالضبط الثغرتان اللتان كشفهما التشغيل الحيّ:
+- كان `trg_bump_version` يُعلَّق على **كل** جدول فيه `version`+`syncSeq`، فدخل جدول `users`؛ وكان تحديث
+  `lastLoginAt` عند الدخول يرفع `users.version` فيتبطل JWT فورًا (سلسلة 401). الفحص الآن: `sync-triggers.spec.ts`.
+- كان كيان `woAttachment` موصوفًا على جدول `documents` الذي عليه بالفعل `trg_sync` — أي كتابة كانت تُنتج
+  سطرين في دفعة التغييرات. الثابت الآن: **جدول واحد = كيان مزامنة واحد**، والصور/المرفقات عمليات `document`.
 
-> ملاحظة تنفيذية موثّقة: المحفّزات لا تستطيع ختم `syncSeq` في `sync_change_log.payload` لنفس الصف (يُنشأ التسلسل بعد الإدراج)، لذا أُنشئ trigger ثانٍ `AFTER INSERT ON sync_change_log` يربط `payload.syncSeq` عبر `sync_entity_registry` مع `EXCEPTION WHEN undefined_table OR undefined_column THEN RETURN NULL` حتى لا ينكهر الترحيل عند إضافة جدول جديد.
+**لماذا تُكتب `syncSeq` من trigger وليس من Prisma؟** لأن المسار الذي يكتبه Prisma يمر بقواعد مختلفة؛
+ختم `syncSeq` + `version` داخل القاعدة يجعل الـ Change Feed صحيحًا حتى للعمليات اليدوية/الإصلاحية (runbook)
+التي ينفذها DBA. ولأن الجداول الحدثية (مثل `documents`) تُكتب من مسارات مختلفة.
 
-## 9. فهرسة مقصودة (أمثلة من الـ DDL)
+> **قاعدة الحراسة ضد التكرار اللانهائي:** كل دالة مؤجّل تفحص `current_setting('app.internal_sync', true)`
+> وتخرج فورًا إن كانت `'true'` — الكتابة في `sync_change_log` لا تُغذّي نفسها.
+> وفي `users` لا يوجد `trg_bump_version` إطلاقًا؛ رفع `users.version` يفعله التطبيق وحده
+> (تغيير كلمة المرور/تغيير الأدوار) مع `PermissionService.invalidate(userId)`.
+
+> ملاحظة تنفيذية موثّقة: المحفّز لا يستطيع ختم `syncSeq` داخل `sync_change_log.payload` للصف نفسه
+> (قيمة التسلسل تُعرف بعد الإدراج)، لذا وُجد `trg_stamp_entity_seq` — مؤجّل `AFTER INSERT ON sync_change_log`
+> يربط `payload.syncSeq` عبر `sync_entity_registry` مع `EXCEPTION WHEN undefined_table OR undefined_column THEN RETURN NULL`
+> حتى لا ينكهر الترحيل عند إضافة جدول جديد.
+
+**أرقام المستندات:** لا `MAX(id)+1`. الخدمة/المزامنة تستدعي `next_business_number('<seq>', 'WO-2026-')`
+داخل المعاملة نفسها، وبعد أي استيراد جماعي أو seed تُنفَّذ `SELECT * FROM fn_align_number_sequences()`
+(13 تسلسلات) — بدونها يعطي أول أمر شغل حقيقي `P2002` على `work_orders.number`. `seed.ts` يستدعيها،
+و`WorkOrderService` يعيد المحاولة دفاعيًا عند `P2002`.
+
+## 9. فهرسة مقصودة (أمثلة حقيقية من القاعدة الحيّة)
+
+الفهارس المُسمّاة `ix_*` هي ما نضيفه في الترحيل يدويًا (البقية يولّدها Prisma من `@@index`/`@unique`)؛
+هذه عيّنة من `pg_indexes` بعد التطبيق الفعلي:
 
 ```sql
-CREATE INDEX ix_wo_status_sub_dept   ON work_orders ("subDeptId", status, "createdAt" DESC);
-CREATE INDEX ix_wo_assigned_open     ON work_orders ("assignedToId", status) WHERE "deletedAt" IS NULL;
-CREATE INDEX ix_punch_employee_time  ON attendance_punches ("employeeId", "punchedAt");
-CREATE INDEX ix_slog_unit_date_shift ON production_shift_logs ("unitId", "shiftDate", "shiftCode");
-CREATE INDEX ix_wo_search_trgm       ON work_orders USING gin ((("title" || ' ' || "description") gin_trgm_ops));
-CREATE INDEX ix_change_entity        ON sync_change_log (entity, seq);
+-- قائمة «ما لم يُغلق» لكل قسم — فهرس جزئي يشذّ الحالات المغلقة/المرفوضة
+ix_wo_open_dept            ON public.work_orders USING btree ("departmentId", status)
+                             WHERE (status <> ALL (ARRAY['CLOSED','CANCELLED','REJECTED']::"WoStatus"[]))
+-- طابور المزامنة: صفوف لم تُختم بعد بـ syncSeq
+ix_wo_sync_pending         ON public.work_orders USING btree ("syncSeq") WHERE ("syncSeq" IS NULL)
+-- بحث نصي (عربي/إنجليزي) في عنوان/وصف أمر الشغل
+ix_wo_text_trgm            ON public.work_orders USING gin (((title || ' ') || description) gin_trgm_ops)
+-- دفعة التغييرات: القراءة الوحيدة المسموحة في المحرّك
+sync_change_log_entity_seq_idx ON public.sync_change_log USING btree (entity, seq)
+sync_change_log_facilityId_seq_idx ON public.sync_change_log USING btree ("facilityId", seq)
+-- منع تكرار البصمة الخام من نفس الجهاز
+attendance_punches_deviceId_rawRecordId_key ON public.attendance_punches USING btree ("deviceId", "rawRecordId")
+-- قيد تفرد الوردية (يوم/وردية/وحدة) — يمنع سجلين لنفس الوردية
+production_shift_logs_unitId_shiftDate_shiftCode_key ON public.production_shift_logs USING btree ("unitId", "shiftDate", "shiftCode")
 ```
-الفهارس الجزئية (`WHERE "deletedAt" IS NULL`) ضرورية هنا لأن كل الجداول تستخدم الحذف المنطقي، وإلا كبر الفهرس بلا فائدة.
+
+الفهارس الجزئية (`WHERE "deletedAt" IS NULL` أو `WHERE status <> …`) ضرورية هنا لأن كل الجداول
+تستخدم الحذف المنطقي، ولأن شاشات المشغل لا تعرض أبدًا ما أُغلق — فالفهرس العام يصير كبيرًا بلا فائدة.
+تُراجَع القائمة كاملة في `docs/generated/schema.postgres.sql` (145 فهرسًا، منها 97 غير مفاتيح).
 
 ## 10. كيف تُنشئ القاعدة فعليًا
 

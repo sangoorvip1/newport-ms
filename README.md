@@ -58,7 +58,10 @@ npm run build -w @newport/api && npm run start -w @newport/api     # http://127.
 ```
 
 المتغيرات الأساسية في `apps/api/.env` (انظر `deploy/.env.production.example`):
-`DATABASE_URL`, `JWT_SECRET`, `FACILITY_CODE=BFC-L1`, `TZ=Asia/Baghdad`, `CORS_ORIGINS`.
+أسماء المتغيرات كما هي في `apps/api/src/config.ts` (لا أسماء تقريبية):
+`DATABASE_URL`, `JWT_SECRET`, `JWT_ACCESS_TTL_SEC`, `REFRESH_TTL_DAYS`, `BCRYPT_ROUNDS`, `FACILITY_CODE=BFC-L1`,
+`SITE_TZ=Asia/Baghdad`, `CORS_ORIGINS`, `PUBLIC_BASE_URL`, `SYNC_MAX_OPS`, `SYNC_MAX_ROWS`, `SYNC_RETENTION_DAYS`,
+`STORAGE_DRIVER`, `MAX_LOGIN_ATTEMPTS`, `LOCKOUT_MINUTES`.
 
 الحسابات المزروعة: كلمة المرور الافتراضية `Newport#2026` مع `mustChangePwd=true`
 (الجلسة تكون **مقيّدة** حتى تغيّر كلمة المرور — يُسمح بمسارات الحساب وتغيير كلمة المرور فقط).
@@ -71,8 +74,9 @@ npm run build -w @newport/api && npm run start -w @newport/api     # http://127.
 فوق كل ما يلي مُنفَّذ في هذه البيئة، لا على الورق:
 
 ```bash
-npm run test:all          # domain 51 · api 29 (منها 5 على قاعدة حيّة) · mobile 8  = 88 فحصًا
+npm run test:all          # domain 51 · api 32 (منها 5 على قاعدة حيّة) · mobile 8  = 91 فحصًا
 npm run typecheck:all     # domain · api · desktop (renderer+electron) · mobile — بلا أخطاء
+npm run docs:all -w @newport/api   # مصفوفة الوصول + docs/03 + DDL + كتالوج المخطط (كلها مشتقة من الكود)
 npm run e2e -w @newport/api   # 37/37 فحص HTTP حيّ
 ```
 
@@ -83,7 +87,8 @@ npm run e2e -w @newport/api   # 37/37 فحص HTTP حيّ
   صلاحية التنفيذ تمنع الفني من الإنشاء ⇒ 403، وحماية الحقول المعتمدة عند `push` (الخادم يحتفظ بـ `status`).
 - المزامنة: `push` idempotent (رد مؤرشف مطابق)، `pull` بمؤشر تسلسلي، `protocol` يعرض 19 كيانًا.
 - التدقيق: `audit_trails` append-only بمؤجّل قاعدة، وكل صف في change-log مختوم بـ `syncSeq`.
-- المخالجات المكتشفة أثناء التحقق الحيّ أُصلحت ولها فحوص تمنع عودتها (انظر `apps/api/test/`).
+- عقد الأخطاء: `4xx` برسالة عربية + حقول الحارس (`required`/`yourGrants`)، و`5xx` بـ `errorId` بلا تسريب تفاصيل القاعدة.
+- المخالجات المكتشفة أثناء التحقق الحيّ أُصلحت ولها فحوص تمنع عودتها (`docs/05` §10).
 
 **غير متحقق هنا:** ملفات Docker/nginx وأدوات .NET (لا توجد في بيئة التطوير) — مذكورة كنماذج إعداد جاهزة للنشر.
 
