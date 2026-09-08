@@ -153,7 +153,7 @@ curl -s https://ops.newport.local/api/health/ready
 ثم:
 - `GET /api/v1/org/drift` → `"isAligned":true` (الهيكل لا يزيد ولا ينقص عن المرجع).
 - `GET /api/v1/org/permissions-verify` → `"inSync":true`, `expectedGrants=actualGrants=36`.
-- `npm run e2e -w @newport/api` → **68/68** (دخان حيّ على HTTP: جلسة، قيد تغيير كلمة المرور،
+- `npm run e2e -w @newport/api` → **74/74** (دخان حيّ على HTTP: بطاقة الجذر، جلسة، قيد تغيير كلمة المرور،
   دورة أمر شغل، idempotency، حماية الحقول المعتمدة، pull، سجل تدقيق).
 
 ---
@@ -300,7 +300,7 @@ npm run prisma:generate -w @newport/api
 npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
 SEED_DEMO=true npm run seed -w @newport/api
 npm run build -w @newport/api && (cd apps/api && node dist/main.js &)
-API_URL=http://127.0.0.1:3000/api npm run e2e -w @newport/api   # 68/68
+API_URL=http://127.0.0.1:3000/api npm run e2e -w @newport/api   # 74/74
 npm run test:all && npm run typecheck:all                        # 88 فحصًا + typecheck نظيف
 ```
 
@@ -323,7 +323,7 @@ npm run test:all && npm run typecheck:all                        # 88 فحصًا
 | 1 | الهيكل التنظيمي مطابق (3/13) دون زيادة أو نقصان | `GET /api/v1/org/drift` → `isAligned:true` ✅ |
 | 2 | RBAC مطابق للمصفوفة المولّدة | `GET /api/v1/org/permissions-verify` → `inSync:true` ✅ |
 | 3 | الترحيلات مطبَّقة على قاعدة فارغة من الصفر | `prisma migrate deploy` بلا أخطاء ✅ |
-| 4 | المزامنة تعمل من جهاز حقيقي/محاكي | `npm run e2e -w @newport/api` → 68/68 ✅ |
+| 4 | المزامنة تعمل من جهاز حقيقي/محاكي | `npm run e2e -w @newport/api` → 74/74 ✅ |
 | 5 | لا تسريب لأسرار في المستودع | `git ls-files \| xargs grep -l "JWT_SECRET=***` → فارغ |
 | 6 | النسخ الاحتياطي مُختبَر بالاسترجاع | `pg_restore` على خادم اختبار (ربع سنوي) |
 | 7 | ساعة الخادم وأجهزة البصمة مضبوطة | `timedatectl` + `TZ=Asia/Baghdad` في كل الخدمات |

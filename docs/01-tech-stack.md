@@ -115,10 +115,10 @@ npm run test -w @newport/api          # 43 اختبارًا: الأمان/الم
 npm run typecheck -w @newport/desktop # tsconfig.json + tsconfig.electron.json
 npm run build -w @newport/desktop     # vite build (حزمة الإنتاج)
 npm run test -w @newport/mobile       # 8 اختبارات: الطابور دون اتصال + مخزن SQLite
-npm run test:all                      # 130 فحصًا (domain 71 + api 51 + mobile 8)
+npm run test:all                      # 146 فحصًا (domain 82 + api 56 + mobile 8)
 npm run typecheck:all                 # 4 حِزَم: domain + api + desktop + mobile (0 أخطاء)
 npm run docs:all -w @newport/api      # مصفوفة الوصول + docs/03 + DDL + كتالوج المخطط (كل الوثائق مشتقة من الكود)
-API_URL=http://127.0.0.1:3000/api DATABASE_URL=… npm run e2e -w @newport/api   # 68 فحصًا حيًّا على الخادم
+API_URL=http://127.0.0.1:3000/api DATABASE_URL=… npm run e2e -w @newport/api   # 74 فحصًا حيًّا على الخادم
 npm run db:ddl && node apps/api/scripts/gen-schema-docs.mjs   # إعادة توليد المخطط والكتالوج
 ```
 

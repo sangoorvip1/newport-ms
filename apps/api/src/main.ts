@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { CONFIG } from './config.js';
 import { installBigIntJson } from './common/json-bigint.js';
+import { rootIndexMiddleware } from './common/root-index.js';
 
 async function bootstrap() {
   const logger = new Logger('bootstrap');
@@ -33,6 +34,7 @@ async function bootstrap() {
     void req;
     next();
   });
+  app.use(rootIndexMiddleware); // بطاقة تعريف على / و/api بدل 404 خام لا يُعرف منه إن كانت الخدمة حيّة
 
   await app.listen(CONFIG.port, '0.0.0.0');
   logger.log(`Newport API → http://0.0.0.0:${CONFIG.port}/api  (facility=${CONFIG.facilityCode}, tz=${CONFIG.timezone})`);

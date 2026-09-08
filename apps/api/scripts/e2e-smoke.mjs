@@ -10,6 +10,7 @@
  * الخروج 0 = كل الفحوص نجحت. أي فشل يطبع الاسم والسبب ويفرج غير-صفر.
  */
 const API = (process.env.API_URL ?? 'http://127.0.0.1:3000/api').replace(/\/$/, '');
+const ORIGIN = API.replace(/\/api\/?$/, ''); // جذر الاستضافة نفسه — بطاقة التعريف تُخدم عليه
 const args = process.argv.slice(2);
 const arg = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
@@ -498,6 +499,33 @@ async function main() {
 
     const listed = await call('GET', `/v1/documents?entityType=workOrder&entityId=${docWoId}`, undefined, { token: techToken });
     check('GET /v1/documents؟entityType=workOrder يعيد روابط تحميل محسوبة', ok(listed.status) && (listed.body?.items ?? []).every((d) => d.downloadPath?.includes('/content')), `total=${listed.body?.total} scope=${listed.body?.scope}`);
+  }
+
+  // 9) بطاقة الجذر: مشغّل المعمل يفتح عنوان الخادم في المتصفح، فـ404 الخام لا يفرّق بين خدمة ميتة ومسار غير معرّف
+  {
+    const root = await fetch(`${ORIGIN}/`, { headers: { accept: 'application/json' } });
+    const card = await root.json().catch(() => null);
+    check('GET / يعيد بطاقة تعريف الخدمة (200، لا 404)', root.status === 200 && card?.service === 'newport-api' && card?.apiPrefix === '/api', `status=${root.status} facility=${card?.facilityCode ?? ''} v=${card?.version ?? ''}`);
+
+    const listed = Array.isArray(card?.endpoints) ? card.endpoints : [];
+    const probes = await Promise.all(
+      listed.map(async (e) => {
+        const r = await fetch(`${ORIGIN}${e}`, { method: 'GET' });
+        return [e, r.status];
+      }),
+    );
+    const dead = probes.filter(([, status]) => status === 404).map(([e]) => e);
+    check('كل مسار في البطاقة موجود فعلًا (لا إعلان مسارات ميتة)', listed.length >= 4 && dead.length === 0, `n=${listed.length} dead=${dead.join(',') || 'لا شيء'}`);
+
+    const page = await fetch(`${ORIGIN}/`, { headers: { accept: 'text/html,application/xhtml+xml' } });
+    const html = await page.text();
+    check('المتصفح يرى صفحة عربية صالحة (rtl) مع منع الأرشفة', page.status === 200 && html.includes('dir="rtl"') && html.includes('noindex') && /<html lang="ar"/.test(html), `len=${html.length}`);
+    const framed = await fetch(`${ORIGIN}/api/health`, { headers: { accept: 'text/html' } });
+    check('DENY باقٍ على بقية المسارات (الاستثناء لصفحة الجذر فقط)', framed.headers.get('x-frame-options') === 'DENY', `xfo=${framed.headers.get('x-frame-options')}`);
+
+    const nope = await fetch(`${ORIGIN}/definitely-not-here`, { headers: { accept: 'application/json' } });
+    const nopeBody = await nope.json().catch(() => null);
+    check('مسار غير معرّف يبقى 404 برسالة عربية (البطاقة لا تبتلع كل شيء)', nope.status === 404 && typeof nopeBody?.messageAr === 'string' && nopeBody.messageAr.length > 8, `status=${nope.status}`);
   }
 
   if (process.env.DATABASE_URL) {

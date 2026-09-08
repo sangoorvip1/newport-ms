@@ -97,6 +97,7 @@
 | `lab/` | `lab.controller.ts` + `lab.service.ts` + `lab.module.ts` | `GET parameters/stats/samples/samples/:id/oos/certificates/:sampleId`, `POST samples`, `POST samples/:id/results`, `POST results/:id/verify`, `POST oos/:id` | العينة مملوكة للشعبة المنتِجة؛ المختبر (kind=LAB) يقرأ قسمه كله؛ الأرقام وحالات OOS والتدقيق من ختم الخادم |
 | `production/` | `production.module.ts` (controller + service في ملف واحد) | `GET params/trend`, `GET/POST shift-logs`, `POST shift-logs/:id/approve` | الاعتماد يختم `approvedById/approvedAt` server-side |
 | `time/` | `attendance.module.ts` (controller + service) | `POST punches/import/recalculate/corrections/corrections/:id/decide`, `GET daily/payroll-export` | تكامل ZKTeco (ملف/JSON) + إعادة حساب + تصحيحات معتمدة |
+| `common/root-index.ts` | وسيط `GET /` و`GET /api` | بطاقة تعريف الخدمة (HTML للعربية للمتصفح، JSON لبقية العملاء) بدل «Cannot GET /» الخام — كل مسار فيها مفحوص حيًّا ألا يكون 404 |
 | `documents/` | `documents.controller.ts` + `documents.service.ts` + `document-store.ts` | `POST upload`, `POST presign`, `PUT raw/:token`, `GET /`, `GET :id/content`, `POST :id/metadata`, `POST :id/delete` | قناة المرفقات الوحيدة؛ البصمة والحجم من البايتات الفعلية، والتوكن الموقّع (HMAC) هو التفويض في مسار الكاميرا بلا جلسة |
 | `sync/` | `sync.controller.ts` + `sync-engine.service.ts` | `POST push`, `GET pull`, `POST batch-plan`, `GET protocol` | المفصّل في §6 |
 | `audit/` | `audit.module.ts` (controller + service) | `GET /`, `GET stats` | قراءة فقط؛ الجدول append-only بقاعدة بيانات |
@@ -319,14 +320,15 @@ src/ui/kit.tsx       RTL، أزرار كبيرة، قوائم اختيار بد�
 | `apps/api/test/schema-contract.spec.ts` | 5 | كل اسم جدول/عمود مستعمل في `SYNC_META`/`ENTITY_MAP` موجود في `schema.prisma`؛ لا snake_case ولا `#` في SQL الترحيل |
 | `apps/api/test/sync-triggers.spec.ts` | 5 | **على قاعدة حيّة**: registry=19، `trg_sync` مرة لكل جدول، `trg_bump_version` لا يمس `users`، `fn_align_number_sequences()`، لا سطر `#` |
 | `apps/api/test/serialization.spec.ts` | 3 | BigInt → JSON (صغير رقم، كبير نص، تثبيت مزدوج آمن) |
+| `apps/api/test/root-index.spec.ts` | 5 | بطاقة الجذر: شكلها، تهريب الوسوم القادمة من البيئة، مفاصلة HTML/JSON، وأنها لا تبتلع أي مسار آخر |
 | `apps/api/test/document-store.spec.ts` | 8 | التوكن الموقّع (HMAC/انتهاء/حمولة معدّلة)، رفض أنواع خطرة (SVG/EXE)، حراسة `../` في المسار، و`wx` ضد استبدال بايتات مسجّلة |
 | `apps/api/test/error-contract.spec.ts` | 3 | عقد الأخطاء (4xx يحافظ على الحقول، ترجمة، 5xx بكتمان + errorId) |
 | `apps/mobile/tests` | 8 | الطابور، التجميع، الإرسال، الدمج، قطع الشبكة |
 | `scripts/e2e-smoke.mjs` | 37 | HTTP حيّ: جاهزية، جلسة، قيد تغيير كلمة المرور، تدوير refresh + كشف إعادة الاستعمال، تطابق الهيكل/الصلاحيات، دورة أمر شغل، رفض انتقال 409، مزامنة push/pull/idempotency/الحماية، سجل تدقيق، ختم `syncSeq` |
 
 ```bash
-npm run test:all && npm run typecheck:all            # 130 فحصًا + typecheck نظيف (4 حِزَم)
-API_URL=… npm run e2e -w @newport/api                # 68/68
+npm run test:all && npm run typecheck:all            # 146 فحصًا + typecheck نظيف (4 حِزَم)
+API_URL=… npm run e2e -w @newport/api                # 74/74
 npm run docs:all -w @newport/api                     # مصفوفة + 03 + DDL + كتالوج (وتفحص أن كل رمز مذكور حقيقي)
 ```
 
