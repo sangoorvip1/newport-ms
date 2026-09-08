@@ -6,6 +6,7 @@
  * لا تكتب الشاشات في SQLite مباشرة — هذا ما يبقي سلوك الهاتف والمكتب متطابقًا.
  */
 import {
+  DOCUMENT_ENTITY_TYPES,
   labResultEntryDto,
   mobileFormRecordDto,
   newUuidV7,
@@ -17,6 +18,7 @@ import {
   type SyncEntity,
   type WorkOrderCreateDto,
 } from '@newport/domain';
+import type { DocumentUploadEntityType } from '@newport/domain';
 import type { FieldSync } from '../state/sync.js';
 
 export class ValidationError extends Error {

@@ -12,7 +12,7 @@ import {
   type SyncEntity,
   type WorkOrderCreateDto,
 } from '@newport/domain';
-import type { SyncClient } from '@newport/domain';
+import type { DocumentUploadQueue, SyncClient } from '@newport/domain';
 
 /** تُستعمل في إنشاء السجلات المحلية الجديدة مع ختم الهوية من قِبل الخادم لاحقًا */
 export function offlineId(): string {
@@ -21,6 +21,8 @@ export function offlineId(): string {
 
 export interface RepoDeps {
   sync: SyncClient;
+  /** طابور رفع المرفقات (/v1/documents) — اختياري حتى لا تنكهر البيئات التي لا تملك IndexedDB */
+  docs?: DocumentUploadQueue;
   read: (entity: SyncEntity, id: string) => Promise<{ data: Record<string, unknown> } | null>;
   subDeptCode: () => string | null;
   userName: () => string;
@@ -67,29 +69,29 @@ export class LocalRepo {
   }
 
   /**
-   * صورة/مرفق التقطه الفني: يُخزَّن محليًا ويُدفَع كسجل `document` مرفوع إلى أمر العمل.
-   * ملاحظة تشغيلية: البايت تبقى على الجهاز حتى يُفعَّل مخزن object-storage؛ نرفع الفهرس
-   * (اسم/نوع/حجم/objectKey = مسار محلي مبدئي) فيظهر المرفق في كل الأجهزة فورًا، والتنزيل
-   * يُستكمل من `documents.objectKey` بعد إضافة قناة presigned upload.
+   * صورة/مرفق التقطه الفني: يذهب إلى طابور رفع الوثائق (docs/05 §5) لا إلى المزامنة.
+   * كان يرسل فهرسًا بـ `objectKey: offline/...` — سطر يبدو سليمًا لكن تحميله 404 للأبد، لأن
+   * objectKey/sha256/sizeBytes تُختم من الملف الفعلي في الخادم. الآن يحمل السجل البايتات نفسها،
+   * والمعرّف يُولَّد هنا ويُعاد في كل محاولة فلا تتكرر الصورة إذا انقطع الاتصال منتصف الرفع.
    */
-  attachPhoto(workOrderId: string, photo: { fileName: string; dataUrl: string; takenAt: string; caption?: string }): Promise<ChangeOp> {
+  async attachPhoto(
+    workOrderId: string,
+    photo: { fileName: string; dataUrl: string; takenAt: string; caption?: string },
+  ): Promise<{ ok: boolean; id: string; reasonAr?: string }> {
+    const docs = this.d.docs;
     const id = offlineId();
-    const approxBytes = Math.max(0, Math.floor((photo.dataUrl.length - (photo.dataUrl.indexOf(',') + 1)) * 0.75));
-    return this.queue({
-      entity: 'document',
+    if (!docs) return { ok: false, id, reasonAr: 'طابور الوثائق غير مهيأ — أعد المحاولة بعد اكتمال الجلسة' };
+    const semi = photo.dataUrl.indexOf(';');
+    const mimeType = semi > 5 ? photo.dataUrl.slice(5, semi) : 'image/jpeg';
+    return docs.add({
       id,
-      kind: 'UPSERT',
-      data: {
-        titleAr: (photo.caption || photo.fileName).slice(0, 240),
-        docType: 'FIELD_PHOTO',
-        originalName: photo.fileName.slice(0, 240),
-        mimeType: photo.dataUrl.slice(5, photo.dataUrl.indexOf(';')) || 'image/jpeg',
-        sizeBytes: approxBytes,
-        objectKey: `offline/${id}/${photo.fileName}`.slice(0, 400),
-        entityType: 'workOrder',
-        entityId: workOrderId,
-        status: 'PENDING_UPLOAD',
-      },
+      docType: 'FIELD_PHOTO',
+      titleAr: (photo.caption?.trim() || photo.fileName).slice(0, 240),
+      originalName: photo.fileName.replace(/\s+/g, '_').slice(0, 240),
+      mimeType,
+      dataBase64: photo.dataUrl.slice(photo.dataUrl.indexOf(',') + 1),
+      entityType: 'workOrder',
+      entityId: workOrderId,
     });
   }
 

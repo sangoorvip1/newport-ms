@@ -29,11 +29,14 @@ export interface SyncEntityMeta {
   protectedFields?: string[];
   /** حقول تُعتبر أحداثًا (append) عند التعارض: ملاحظات/صور/تواقيع */
   appendFields?: string[];
+  /** true ⇒ الكتابة عبر قناة REST مخصصة (بايتات في المخزن)؛ المزامنة للسحب فقط ولا تُقبل عليها عمليات دفع */
+  restOnly?: boolean;
   descriptionAr: string;
 }
 
-// قاعدة: كيان متزامن واحد لكل جدول فيزيائي — المرفقات تُدفع كـ document مع entityType/entityId،
+// قاعدة: كيان متزامن واحد لكل جدول فيزيائي — المرفقات تُسحَب كفهرس document (objectKey/sha256 من الخادم)،
 // لأن جدولاً واحدًا لا يحتمل triggerَين يكتبان Change Feed مزدوجًا لنفس الصف.
+// الدفع معكوس الاتجاه: بايتات المرفقات لا تمر بالمزامنة (restOnly) — راجع DocumentUploadQueue في documents.ts.
 export const SYNC_ENTITIES = [
   'workOrder', 'workOrderLog', 'laborEntry', 'partIssue',
   'shiftLog', 'processParam', 'downtime', 'alarmAck',
@@ -71,7 +74,7 @@ export const SYNC_META: Record<SyncEntity, SyncEntityMeta> = {
   attendancePunch: { entity: 'attendancePunch', table: 'attendance_punches', merge: 'append_only', pushPriority: 3, clientGeneratedIds: true, descriptionAr: 'بصمة يدوية/استكمال (يُسجَّل مصدرها).' },
   leaveRequest: { entity: 'leaveRequest', table: 'leave_requests', merge: 'field_merge', pushPriority: 3, clientGeneratedIds: true, protectedFields: ['status', 'approverUserId', 'decidedAt'], descriptionAr: 'طلب إجازة.' },
   mobileFormRecord: { entity: 'mobileFormRecord', table: 'mobile_form_records', merge: 'append_only', pushPriority: 1, clientGeneratedIds: true, descriptionAr: 'نماذج ميدانية معرّفة (JSON Schema).' },
-  document: { entity: 'document', table: 'documents', merge: 'append_only', pushPriority: 3, clientGeneratedIds: true, descriptionAr: 'وثيقة/مرفق مع فهرس Meta.' },
+  document: { entity: 'document', table: 'documents', merge: 'append_only', pushPriority: 3, clientGeneratedIds: true, restOnly: true, descriptionAr: 'فهرس وثيقة/مرفق — السحب عبر المزامنة، والرفع عبر /v1/documents فقط.' },
   notificationAck: { entity: 'notificationAck', table: 'notifications', merge: 'append_only', pushPriority: 3, clientGeneratedIds: false, descriptionAr: 'قراءة/إقرار إشعار.' },
 };
 

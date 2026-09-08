@@ -118,6 +118,34 @@ export async function apiFetch<T>(path: string, opts: RequestOptions = {}): Prom
   return payload as T;
 }
 
+/**
+ * PUT بايتات خام إلى رابط موقّع مطلق (قناة الوثائق: `presign` ثم هذا المسار).
+ * لا يمر بـ apiFetch لأن الرابط مطلق والتفويض داخل التوكن نفسه — لا رأس جلسة.
+ */
+export async function putSigned(url: string, body: Uint8Array, contentType: string): Promise<{ id?: string; objectKey?: string | null }> {
+  let res: Response;
+  try {
+    res = await fetch(url, { method: 'PUT', headers: { 'content-type': contentType }, body: body as BodyInit });
+  } catch (e) {
+    throw new ApiError(0, 'انقطع الاتصال أثناء رفع الملف — بقي في الطابور وسيُعاد تلقائيًا', String((e as Error).message));
+  }
+  const text = await res.text().catch(() => '');
+  if (!res.ok) {
+    let payload: { messageAr?: string } | null = null;
+    try {
+      payload = JSON.parse(text) as { messageAr?: string };
+    } catch {
+      payload = null;
+    }
+    throw new ApiError(res.status, payload?.messageAr ?? `رفض الخادم الرفع (${res.status})`, payload ?? undefined);
+  }
+  try {
+    return (text ? JSON.parse(text) : {}) as { id?: string; objectKey?: string | null };
+  } catch {
+    return {};
+  }
+}
+
 function safeJson(text: string): unknown {
   try {
     return JSON.parse(text);

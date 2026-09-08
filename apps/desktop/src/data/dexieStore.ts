@@ -10,6 +10,8 @@ import Dexie, { type Table } from 'dexie';
 import {
   MemoryStore,
   type ChangeOp,
+  type DocumentPendingRecord,
+  type DocumentPendingStore,
   type EntityRecord,
   type LocalConflict,
   type LocalStore,
@@ -52,8 +54,28 @@ interface MetaRow {
   value: string;
 }
 
+interface PendingDocRow {
+  id: string;
+  docType: string;
+  titleAr: string;
+  originalName: string;
+  mimeType: string;
+  dataBase64: string;
+  entityType: string | null;
+  entityId: string | null;
+  categoryCode: string | null;
+  code: string | null;
+  isEncrypted: number;
+  sizeBytes: number;
+  attempts: number;
+  lastErrorAr: string | null;
+  queuedAt: string;
+  objectKey: string | null;
+}
+
 class NewportDb extends Dexie {
   records!: Table<Row, string>;
+  pendingDocuments!: Table<PendingDocRow, string>;
   pendingOps!: Table<PendingRow, string>;
   conflicts!: Table<ConflictRow, string>;
   meta!: Table<MetaRow, string>;
@@ -66,12 +88,16 @@ class NewportDb extends Dexie {
       conflicts: 'opId, entity, recordId',
       meta: 'key',
     });
+    // نسخة 2: طابور رفع المرفقات — مفصول عن pendingOps لأن البايتات لا تُرسل بالمزامنة (restOnly)
+    this.version(2).stores({
+      pendingDocuments: 'id, queuedAt, attempts',
+    });
   }
 }
 
 const key = (entity: string, id: string) => `${entity}:${id}`;
 
-export class DexieStore implements LocalStore {
+export class DexieStore implements LocalStore, DocumentPendingStore {
   private readonly db = new NewportDb();
 
   async read(entity: SyncEntity, id: string): Promise<EntityRecord | null> {
@@ -152,9 +178,29 @@ export class DexieStore implements LocalStore {
   }
 
   /** إحصاءات تُعرض في شريط الحالة */
-  async stats(): Promise<{ records: number; pending: number; conflicts: number }> {
-    const [records, pending, conflicts] = await Promise.all([this.db.records.count(), this.db.pendingOps.count(), this.db.conflicts.count()]);
-    return { records, pending, conflicts };
+  async stats(): Promise<{ records: number; pending: number; conflicts: number; pendingDocs: number }> {
+    const [records, pending, conflicts, pendingDocs] = await Promise.all([
+      this.db.records.count(),
+      this.db.pendingOps.count(),
+      this.db.conflicts.count(),
+      this.db.pendingDocuments.count(),
+    ]);
+    return { records, pending, conflicts, pendingDocs };
+  }
+
+  /* ─────────── DocumentPendingStore (طابور رفع الوثائق) ─────────── */
+
+  async listPending(): Promise<DocumentPendingRecord[]> {
+    const rows = await this.db.pendingDocuments.orderBy('queuedAt').toArray();
+    return rows.map((r) => ({ ...r, isEncrypted: r.isEncrypted === 1 }));
+  }
+
+  async savePending(rec: DocumentPendingRecord): Promise<void> {
+    await this.db.pendingDocuments.put({ ...rec, isEncrypted: rec.isEncrypted ? 1 : 0 });
+  }
+
+  async forgetPending(id: string): Promise<void> {
+    await this.db.pendingDocuments.delete(id);
   }
 
   /** مسح بيانات القراءة فقط بعد طلب إعادة مزامنة كاملة (الطابور المعلق يبقى مصونًا) */
@@ -168,7 +214,7 @@ export class DexieStore implements LocalStore {
 }
 
 /** إن لم يتوفر IndexedDB (بيئة اختبار/WebView قديم) نسقط إلى مخزن في الذاكرة دون أن تنكهر الواجهة */
-export function createStore(): LocalStore & { stats?: () => Promise<{ records: number; pending: number; conflicts: number }>; wipeRemoteRecords?: () => Promise<void> } {
+export function createStore(): LocalStore & DocumentPendingStore & { stats?: () => Promise<{ records: number; pending: number; conflicts: number; pendingDocs?: number }>; wipeRemoteRecords?: () => Promise<void> } {
   const hasIdb = typeof globalThis.indexedDB !== 'undefined';
   return hasIdb ? new DexieStore() : new MemoryStore();
 }

@@ -283,7 +283,7 @@
 | تسجيل ساعات العمالة والمعدات | LaborEntry | كلاهما | POST /v1/maintenance/work-orders/:id/labor · push: laborEntry | — |
 | قياسات الحالة: حرارة سطح، سماكة، تصوير حراري | ConditionReadings | هاتف | push: assetReading · maint.condition.record | — |
 | طلب قطع غيار/مواد | PartsRequest | كلاهما | push: partIssue | — |
-| المرفقات والصور الميدانية | AttachmentSheet | كلاهما | push: document · POST /v1/documents/upload · PUT /v1/documents/raw/:token | الفهرس يُدفع مع المزامنة، والبايتات عبر قناة الرفع: JSON لسطح المكتب وpresign+PUT لكاميرا الهاتف |
+| المرفقات والصور الميدانية | AttachmentSheet | كلاهما | POST /v1/documents/upload · PUT /v1/documents/raw/:token | المرفقات restOnly: المزامنة تسحب الفهرس فقط، والرفع عبر الطابور المحلي (JSON للمكتب، presign+PUT للكاميرا) |
 | خطة PM للمعدات الحرارية | PmPlanBoard | مكتب | pull: pmPlanInstance | — |
 | مؤشرات MTBF/MTTR والتكدّس | MaintenanceCockpit | مكتب | دوال fn_mtbf_mttr / fn_wo_backlog_age في القاعدة | — |
 
@@ -329,7 +329,7 @@
 |---|---|---|---|---|
 | قراءات الاهتزاز وحرارة المحامل | VibrationLog | هاتف | push: assetReading | — |
 | خطة تحليل الزيت وسحب العينات | OilSamplePlan | كلاهما | push: labSample | entityType=ASSET |
-| تقرير المحاذاة/الموازنة المرفق | AlignmentReport | مكتب | POST /v1/documents/upload · push: document | — |
+| تقرير المحاذاة/الموازنة المرفق | AlignmentReport | مكتب | POST /v1/documents/upload · DocumentUploadQueue | — |
 | أوامر الشغل وسجل العمالة | TasksScreen | كلاهما | /v1/maintenance/work-orders | — |
 | خطة PM لكل معدن دوّار | PmPlanBoard | مكتب | pull: pmPlanInstance | — |
 
@@ -459,7 +459,7 @@
 |---|---|---|---|---|
 | خطة المعايرة ومتابعة انتهائها | CalibrationPlan | مكتب | pull: pmPlanInstance | — |
 | بطاقة معايرة (قبل/بعد/انحراف) | CalibrationCard | هاتف | push: assetReading | — |
-| نتائج اختبار الحلقة و ESD | LoopTestSheet | كلاهما | push: workOrderLog · push: document · GET /v1/documents?entityType=workOrder | — |
+| نتائج اختبار الحلقة و ESD | LoopTestSheet | كلاهما | push: workOrderLog · POST /v1/documents/upload · GET /v1/documents?entityType=workOrder | — |
 | سجل تغييرات منطق DCS/PLC | LogicChangeLog | مكتب | documents + audit_trails | جدول تغييرات مخصص في 1ب |
 | أوامر شغل الأجهزة الدقيقة | TasksScreen | كلاهما | /v1/maintenance/work-orders | — |
 
@@ -503,7 +503,7 @@
 | طلب صيانة عام من أي شعبة | NewWorkOrderScreen | كلاهما | POST /v1/maintenance/work-orders | — |
 | سجل الأدوات المستعارة/المُرجَّعة | ToolCrib | مكتب | push: asset · push: laborEntry | الأداة تُسجَّل كأصل فرعي |
 | خطط صيانة المباني و HVAC | PmPlanBoard | مكتب | pull: pmPlanInstance | — |
-| تذكرة تنظيف/رفع مخلفات مع مرفقات | WasteTicket | كلاهما | push: document · POST /v1/documents/presign | — |
+| تذكرة تنظيف/رفع مخلفات مع مرفقات | WasteTicket | كلاهما | POST /v1/documents/presign · PUT /v1/documents/raw/:token | — |
 | سجل السلامة للمقاولين الخارجيين | ContractorLog | مكتب | users/employees (CONTRACTOR) | — |
 
 **ج) الأدوار ومنحها الفعلي في هذه الشعبة**
@@ -732,4 +732,4 @@
 
 ---
 
-*المجلدات: 3 · الشعب: 13 · التوليد: 2026-09-07*
+*المجلدات: 3 · الشعب: 13 · التوليد: 2026-09-08*

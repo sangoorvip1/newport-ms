@@ -23,6 +23,7 @@ import {
   type PullResponse,
   type SyncEntity,
 } from './sync.js';
+import type { DocumentPendingRecord, DocumentPendingStore } from './documents.js';
 
 /** نسخة من سجل مخزّنة محليًا. `data` يحتوي حقول الجدول + `version`/`deletedAt`. */
 export interface EntityRecord<T = Record<string, unknown>> {
@@ -214,6 +215,11 @@ export class SyncClient {
 
   /** تسجيل تعديل محلي: يُكتب فورًا في المخزن (تجربة فورية للمستخدم) ويُدفع للطابور */
   async queue(m: LocalMutation): Promise<ChangeOp> {
+    const guard = SYNC_META[m.entity];
+    if (guard?.restOnly) {
+      // الفشل هنا مقصود: لو قَبِلنا العملية فستبقى في الطابور إلى الأبد أو تُنشئ سطرًا بـ objectKey وهمي
+      throw new Error(`«${m.entity}» لا يُكتب عبر المزامنة — ${guard.descriptionAr}`);
+    }
     const current = await this.store.read(m.entity, m.id);
     const data = m.kind === 'PATCH' ? { ...(current?.data ?? {}), ...(m.data ?? {}) } : (m.data ?? {});
     const op: ChangeOp = {
@@ -474,11 +480,23 @@ export function appendNote(serverText: string | undefined, clientText: string): 
  * مخزن مرجعي في الذاكرة — يُستخدم في الاختبارات وفي معاينة الواجهة (Storybook/Dev).
  * التنفيذ الفعلي: Dexie في سطح المكتب و expo-sqlite في الموبايل.
  */
-export class MemoryStore implements LocalStore {
+export class MemoryStore implements LocalStore, DocumentPendingStore {
   private readonly recs = new Map<string, EntityRecord>();
   private readonly state = new Map<string, string>();
   private queue: PendingOp[] = [];
   private readonly confl = new Map<string, LocalConflict>();
+  /** طابور رفع الوثائق (واجهة DocumentPendingStore) — لبيئة التطوير والاختبارات بلا SQLite/Dexie */
+  private readonly docs = new Map<string, DocumentPendingRecord>();
+
+  async listPending(): Promise<DocumentPendingRecord[]> {
+    return [...this.docs.values()].map((r) => ({ ...r }));
+  }
+  async savePending(rec: DocumentPendingRecord): Promise<void> {
+    this.docs.set(rec.id, { ...rec });
+  }
+  async forgetPending(id: string): Promise<void> {
+    this.docs.delete(id);
+  }
   private seq = 0;
 
   private key(entity: SyncEntity, id: string) {

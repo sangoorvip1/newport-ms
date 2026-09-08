@@ -9,3 +9,4 @@ export * from './matrix.js';
 export * from './perm.js';
 export * from './attendance.js';
 export * from './client.js';
+export * from './documents.js';

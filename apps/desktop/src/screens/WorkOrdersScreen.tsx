@@ -147,8 +147,8 @@ export function WorkOrdersScreen() {
       fr.onerror = () => reject(fr.error);
       fr.readAsDataURL(file);
     });
-    await repo.attachPhoto(current.id, { fileName: file.name, dataUrl, takenAt: new Date().toISOString(), caption: '' });
-    setMsg('أُضيفت الصورة إلى طابور المزامنة.');
+    const res = await repo.attachPhoto(current.id, { fileName: file.name, dataUrl, takenAt: new Date().toISOString(), caption: '' });
+    setMsg(res.ok ? 'أُضيفت الصورة إلى طابور الرفع — تُرسل عند أول اتصال بخادم المعمل.' : `لم تُقبل الصورة: ${res.reasonAr ?? 'سبب غير معروف'}`);
     nudge();
   };
 

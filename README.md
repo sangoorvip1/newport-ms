@@ -74,10 +74,10 @@ npm run build -w @newport/api && npm run start -w @newport/api     # http://127.
 فوق كل ما يلي مُنفَّذ في هذه البيئة، لا على الورق:
 
 ```bash
-npm run test:all          # domain 71 · api 51 (منها 5 على قاعدة حيّة) · mobile 8  = 130 فحصًا
+npm run test:all          # domain 82 · api 51 (منها 4 على قاعدة حيّة) · mobile 8  = 141 فحصًا
 npm run typecheck:all     # domain · api · desktop (renderer+electron) · mobile — بلا أخطاء
 npm run docs:all -w @newport/api   # مصفوفة الوصول + docs/03 + DDL + كتالوج المخطط (كلها مشتقة من الكود)
-npm run e2e -w @newport/api   # 68/68 فحص HTTP حيّ
+npm run e2e -w @newport/api   # 69/69 فحص HTTP حيّ
 ```
 
 - `GET /api/health/ready` → `{"database":"ok","organization":"3 dept / 13 sub-dept (reference: 3/13)","rbac":"21/21 roles, 94/94 permissions","openConflicts":"0"}`
@@ -89,6 +89,8 @@ npm run e2e -w @newport/api   # 68/68 فحص HTTP حيّ
 - المختبر (عبر `GET/POST /v1/lab/*`): عينة من شعبة إنتاج ⇒ رقم `SMP-…` من تسلسل القاعدة، تجاوز المواصفة ⇒ حالة OOS تلقائيًا، تدقيق نتيجة واحدة ⇒ تبقى `RESULTED`، الشهادة ⇒ `409` حتى إغلاق OOS ثم صفوف الشهادة بتواقيعها.
 - التدقيق: `audit_trails` append-only بمؤجّل قاعدة، وكل صف في change-log مختوم بـ `syncSeq`.
 - عقد الأخطاء: `4xx` برسالة عربية + حقول الحارس (`required`/`yourGrants`)، و`5xx` بـ `errorId` بلا تسريب تفاصيل القاعدة.
+- طابور رفع الوثائق في العميلين (SQLite/Dexie): فحص محلي للنوع والحجم قبل الشبكة، نفس معرّف العميل في كل
+  إعادة محاولة، ورفض `push: document` في المزامنة (restOnly ⇒ `REJECTED` في الفحص الحيّ).
 - الوثائق: رفع PNG مرفق بأمر شغل ⇒ بصمة وحجم من البايتات؛ تحميله يعيد نفس البتّات وهيدر `x-content-sha256`؛
   `presign` + `PUT raw` يعمل بلا جلسة (التوكن هو التفويض) ويرفض 413 عند تجاوز الحد أثناء البث؛ و403 لشعبة أخرى تطلب المرفق.
 - المخالجات المكتشفة أثناء التحقق الحيّ أُصلحت ولها فحوص تمنع عودتها (`docs/05` §10).

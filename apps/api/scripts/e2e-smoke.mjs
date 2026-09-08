@@ -278,6 +278,22 @@ async function main() {
     r0again?.outcome === r0?.outcome && String(r0again?.reasonAr ?? '').includes('idempotency') && r0again?.serverSeq === r0?.serverSeq,
     `outcome=${r0again?.outcome} seq=${r0again?.serverSeq} (الأصل ${r0?.outcome}/${r0?.serverSeq}) — ${r0again?.reasonAr ?? ''}`,
   );
+  // المرفقات restOnly: لا يُقبل فهرس document عبر المزامنة (objectKey/sha256 تُختم من الملف في الخادم)
+  const docPush = await callM('POST', '/v1/sync/push', {
+    ...pushBody,
+    ops: [
+      {
+        ...pushBody.ops[0],
+        opId: `e2e-doc-${Date.now()}`,
+        entity: 'document',
+        kind: 'UPSERT',
+        data: { titleAr: 'فهرس صورة بلا ملف', docType: 'FIELD_PHOTO', originalName: 'a.png', mimeType: 'image/png', objectKey: 'offline/a.png' },
+      },
+    ],
+  });
+  const rDoc = docPush.body?.results?.[0];
+  check('دفع document عبر المزامنة ⇒ REJECTED مع تحويل إلى /v1/documents', rDoc?.outcome === 'REJECTED' && String(rDoc?.reasonAr ?? '').includes('/v1/documents'), `outcome=${rDoc?.outcome} reason=${String(rDoc?.reasonAr ?? '').slice(0, 72)}`);
+
   const after = await call2('GET', `/v1/maintenance/work-orders/${woId}`);
   check('ملاحظة الميدان وصلت ولم تُستبدل الحالة', String(after.body?.description ?? '').includes('ملاحظة ميدانية') && after.body?.status === 'SUBMITTED', `status=${after.body?.status}`);
 

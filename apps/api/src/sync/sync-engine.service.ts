@@ -111,6 +111,12 @@ export class SyncEngineService {
     const gate = this.permissionGate(op, meta, access);
     if (gate) return { ...base, outcome: 'REJECTED', reasonAr: gate };
 
+    // 2أ) المرفقات: objectKey/sha256/sizeBytes تُختم من الملفات الفعلية في الخادم، فلا يُقبل إنشاؤها
+    // عبر المزامنة (عميل قديم كان يرسل objectKey بصيغة offline/... يشير إلى بايتات غير موجودة).
+    if (meta.restOnly) {
+      return { ...base, outcome: 'REJECTED', reasonAr: `${meta.descriptionAr} — الرفع عبر POST /v1/documents/upload أو presign ثم PUT، والحذف عبر POST /v1/documents/:id/delete` };
+    }
+
     // 2ب) السجلات الحدثية لا تُحذف إطلاقًا — نفحصها قبل أي استعلام نطاق
     if (op.kind === 'DELETE' && meta.merge === 'append_only') {
       return { ...base, outcome: 'REJECTED', reasonAr: 'سجل حدثي لا يُحذف (append-only)' };

@@ -2,13 +2,14 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createReadStream, statSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, extname } from 'node:path';
+import { DOCUMENT_MIME_EXTENSIONS, documentExtensionFor } from '@newport/domain';
 import { CONFIG } from '../config.js';
 
 /**
  * مخزن الملفات المحلي (driver='local') + قناة الرفع الموقّعة للتطبيقات الميدانية.
  *
- * لماذا لا نضيف عميل K8s/MinIO (`@aws-sdk/client-s3`)؟ بيئة المعمل تعمل بلا إنترنت، وقناة محلية واحدة تكفي حاجتها الفعلية:
- * صور أوامر الشغل ونتائج التحاليل (ملفات صغيرة نسبيًا). objectKey هنا بنفس شكل مفاتيح K8s/MinIO
+ * لماذا لا نضيف عميل كائنات (`@aws-sdk/client-s3`)؟ بيئة المعمل تعمل بلا إنترنت، وقناة محلية واحدة تكفي حاجتها الفعلية:
+ * صور أوامر الشغل ونتائج التحاليل (ملفات صغيرة نسبيًا). objectKey هنا بنفس شكل مفاتيح MinIO/S3
  * (`docs/yyyy/mm/<id>.<ext>`) حتى يكون تبديل المشغّل إلى MinIO لاحقًا تغيير إعداد لا تغيير عقود.
  *
  * التوكن الموقّع: للكاميرا في الهاتف — إرسال bytes خام أصح من base64 في JSON (يزيد الحجم 33%
@@ -16,21 +17,12 @@ import { CONFIG } from '../config.js';
  * وينتهي بعد STORAGE_SIGNED_TTL ثانية.
  */
 
-/** الأنواع المسموحة صراحةً: ما عدا ذلك يُرفض قبل المساس بالقرص */
-const ALLOWED_TYPES: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-  'image/heic': 'heic',
-  'application/pdf': 'pdf',
-  'text/plain': 'txt',
-  'text/csv': 'csv',
-};
-
-export const allowedMimeTypes = Object.keys(ALLOWED_TYPES);
+// الجدول في @newport/domain لاشتراك الخادم والعملاء فيه: لو اختلفت القائمتان لنجح رفعٌ في الهاتف
+// ثم يُرفض في الخادم بعد نقل البايتات (تجربة سيئة على 4G ولا تُرى في الاختبارات الوحدوية للعميل).
+export const allowedMimeTypes = Object.keys(DOCUMENT_MIME_EXTENSIONS);
 
 export function extensionFor(mimeType: string): string | null {
-  return ALLOWED_TYPES[mimeType] ?? null;
+  return documentExtensionFor(mimeType);
 }
 
 /** مسار نسبي داخل المخزن — بلا نقطة أو slash تجريبيين (منع ../) ومبني على معرّف مولّد */

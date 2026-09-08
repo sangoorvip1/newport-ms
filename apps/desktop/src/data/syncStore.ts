@@ -4,11 +4,15 @@
  *  - نبض دوري عند توفّر الشبكة + دفع فوري عند حفظ سجل (debounced) + إعادة محاولة بتراجع أسّي.
  *  - يقرأ المستخدم الحالي من نفس الجلسة (JWT)؛ بلا جلسة لا مزامنة.
  */
-import { SyncClient, backoffMs, type LocalStore, type SyncRunReport } from '@newport/domain';
+import { SyncClient, backoffMs, type DocumentPendingStore, type LocalStore, type SyncRunReport } from '@newport/domain';
 import { apiFetch, currentTokens, deviceId, syncTransport } from './api.js';
 import { createStore } from './dexieStore.js';
 
-export const localStore: LocalStore & { stats?: () => Promise<{ records: number; pending: number; conflicts: number }>; wipeRemoteRecords?: () => Promise<void> } = createStore();
+export const localStore: LocalStore &
+  DocumentPendingStore & {
+    stats?: () => Promise<{ records: number; pending: number; conflicts: number; pendingDocs?: number }>;
+    wipeRemoteRecords?: () => Promise<void>;
+  } = createStore();
 
 export interface SyncHandle {
   client: SyncClient;
@@ -29,6 +33,8 @@ export interface SyncStatus {
   pending: number;
   conflicts: number;
   records: number;
+  /** صور/وثائق في طابور الرفع إلى /v1/documents (منفصل عن pending الذي يُحسب للمزامنة) */
+  pendingDocs?: number;
   nextRetryAt?: number;
   startedAt?: number;
 }
@@ -53,11 +59,12 @@ export function createSyncHandle(): SyncHandle {
     const [pending, conflicts, stats] = await Promise.all([
       client.pendingCount().catch(() => 0),
       client.conflicts().then((c) => c.length).catch(() => 0),
-      localStore.stats?.().catch(() => ({ records: 0, pending: 0, conflicts: 0 })) ?? Promise.resolve({ records: 0, pending: 0, conflicts: 0 }),
+      localStore.stats?.().catch(() => ({ records: 0, pending: 0, conflicts: 0, pendingDocs: 0 })) ?? Promise.resolve({ records: 0, pending: 0, conflicts: 0, pendingDocs: 0 }),
     ]);
     status.pending = pending;
     status.conflicts = conflicts;
     status.records = stats.records;
+    status.pendingDocs = stats.pendingDocs ?? 0;
   };
 
   const run = async (): Promise<void> => {

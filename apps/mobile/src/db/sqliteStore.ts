@@ -6,7 +6,7 @@
  *  - الدمج/إعادة المزامنة الكاملة تصير عملية واحدة (DELETE + INSERT) لا 19 عملية؛
  *  - الحقل `pending` يبقى صغيرًا ويستفيد من فهرس (entity, attempts) لتسلسل الدفع حسب الأولوية.
  */
-import { MemoryStore, type ChangeOp, type EntityRecord, type LocalConflict, type LocalStore, type PendingOp, type SyncEntity, type SyncStateKey } from '@newport/domain';
+import { MemoryStore, type ChangeOp, type DocumentPendingRecord, type DocumentPendingStore, type EntityRecord, type LocalConflict, type LocalStore, type PendingOp, type SyncEntity, type SyncStateKey } from '@newport/domain';
 import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 
 interface Row {
@@ -27,6 +27,25 @@ interface PendingRow {
   lastError: string | null;
   lastErrorAt: string | null;
 }
+interface DocRow {
+  id: string;
+  docType: string;
+  titleAr: string;
+  originalName: string;
+  mimeType: string;
+  dataBase64: string;
+  entityType: string | null;
+  entityId: string | null;
+  categoryCode: string | null;
+  code: string | null;
+  isEncrypted: number;
+  sizeBytes: number;
+  attempts: number;
+  lastErrorAr: string | null;
+  queuedAt: string;
+  objectKey: string | null;
+}
+
 interface ConflictRow {
   opId: string;
   entity: string;
@@ -58,9 +77,17 @@ CREATE TABLE IF NOT EXISTS conflicts (
   outcome TEXT NOT NULL, reasonAr TEXT NOT NULL, serverJson TEXT, clientJson TEXT NOT NULL, at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+-- طابور رفع المرفقات: البايتات هنا مؤقتة وتُمحى بعد قبول الخادم، ولا تمرّ بطابور المزامنة
+CREATE TABLE IF NOT EXISTS pending_documents (
+  id TEXT PRIMARY KEY, docType TEXT NOT NULL, titleAr TEXT NOT NULL, originalName TEXT NOT NULL,
+  mimeType TEXT NOT NULL, dataBase64 TEXT NOT NULL, entityType TEXT, entityId TEXT,
+  categoryCode TEXT, code TEXT, isEncrypted INTEGER NOT NULL DEFAULT 0, sizeBytes INTEGER NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0, lastErrorAr TEXT, queuedAt TEXT NOT NULL, objectKey TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_pending_docs_queued ON pending_documents(queuedAt);
 `;
 
-export class SqliteStore implements LocalStore {
+export class SqliteStore implements LocalStore, DocumentPendingStore {
   private constructor(private readonly db: SQLiteDatabase) {}
 
   static async open(name = 'newport-field.db'): Promise<SqliteStore> {
@@ -82,6 +109,47 @@ export class SqliteStore implements LocalStore {
   }
   private run(sql: string, params: unknown[] = []): void {
     this.db.prepareSync(sql).executeSync(params);
+  }
+
+  /* ─────────── طابور الوثائق (DocumentPendingStore) ─────────── */
+
+  async listPending(): Promise<DocumentPendingRecord[]> {
+    const rows = this.all<DocRow>('SELECT * FROM pending_documents ORDER BY queuedAt ASC');
+    return rows.map((r) => ({
+      id: r.id,
+      docType: r.docType,
+      titleAr: r.titleAr,
+      originalName: r.originalName,
+      mimeType: r.mimeType,
+      dataBase64: r.dataBase64,
+      entityType: r.entityType ?? null,
+      entityId: r.entityId ?? null,
+      categoryCode: r.categoryCode ?? null,
+      code: r.code ?? null,
+      isEncrypted: r.isEncrypted === 1,
+      sizeBytes: Number(r.sizeBytes),
+      attempts: Number(r.attempts),
+      lastErrorAr: r.lastErrorAr ?? null,
+      queuedAt: r.queuedAt,
+      objectKey: r.objectKey ?? null,
+    }));
+  }
+
+  async savePending(rec: DocumentPendingRecord): Promise<void> {
+    this.run(
+      `INSERT INTO pending_documents (id, docType, titleAr, originalName, mimeType, dataBase64, entityType, entityId, categoryCode, code, isEncrypted, sizeBytes, attempts, lastErrorAr, queuedAt, objectKey)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET titleAr=excluded.titleAr, dataBase64=excluded.dataBase64, sizeBytes=excluded.sizeBytes,
+         attempts=excluded.attempts, lastErrorAr=excluded.lastErrorAr, objectKey=excluded.objectKey`,
+      [
+        rec.id, rec.docType, rec.titleAr, rec.originalName, rec.mimeType, rec.dataBase64, rec.entityType, rec.entityId,
+        rec.categoryCode, rec.code, rec.isEncrypted ? 1 : 0, rec.sizeBytes, rec.attempts, rec.lastErrorAr, rec.queuedAt, rec.objectKey,
+      ],
+    );
+  }
+
+  async forgetPending(id: string): Promise<void> {
+    this.run('DELETE FROM pending_documents WHERE id = ?', [id]);
   }
 
   async read(entity: SyncEntity, id: string): Promise<EntityRecord | null> {
@@ -195,7 +263,7 @@ export class SqliteStore implements LocalStore {
  * فتح المخزن: SQLite على الجهاز، ومع بديل في الذاكرة إذا كان الجسر الأصلي غير متاح
  * (Expo Go بدون plugin، أو بيئة اختبار). البديل يبقى كامل السلوك لأن الواجهة واحدة.
  */
-export async function openStore(): Promise<LocalStore> {
+export async function openStore(): Promise<LocalStore & DocumentPendingStore> {
   try {
     return await SqliteStore.open();
   } catch {

@@ -293,7 +293,7 @@ eas update --channel production --platform all      # أو شغّل خادم upd
 
 ```bash
 npm ci
-node apps/api/scripts/dev-db.mjs                      # أو أي PostgreSQL محلي على 5432
+npm i -w @newport/api && node apps/api/scripts/dev-db.mjs   # قاعدة على 54329 (من .pgdata) — أو أي PostgreSQL محلي
 export DATABASE_URL="postgresql://newport:newport@127.0.0.1:5432/newport?schema=public"
 npm run build -w @newport/domain
 npm run prisma:generate -w @newport/api
@@ -308,7 +308,10 @@ npm run test:all && npm run typecheck:all                        # 88 فحصًا
 - `DROP DATABASE newport WITH (FORCE)` وحده ينجح إذا أوقفت الـ API أولًا (الاتصالات الحيّة تمنع الإسقاط).
 - لا تكتب أسماء جداول/أعمدة من الذاكرة: `prisma migrate diff` أو `information_schema` (الأعمدة camelCase
   مقبَّسة لأن `@@map` يغيّر أسماء الجداول فقط).
-- `scripts/dev-db.mjs` مرفق لتسهيل التشغيل المحلي؛ إن كانت عندك قاعدة قائمة فالأفضل استعمالها مباشرة.
+- `scripts/dev-db.mjs` مرفق (اعتماده `embedded-postgres` مذكور في `devDependencies` حتى يعمل على نسخة مستنسخة
+  حديثًا): يبني عنقود القاعدة في `apps/api/.pgdata` على المنفذ **54329** وينشئ المستخدم/القاعدة `newport`، ويطري
+  روابط SONAME لـ ICU المرفقة مع الحزمة (بدونها يفشل `initdb` على الصور التي تحمل ICU 76 فقط).
+  مخرجاته تختتم بسطر `READY DATABASE_URL=…` — انسخه كما هو لبقية الأوامر.
 - بعد أي تعديل على `schema.prisma` أو `packages/domain`: `npm run docs:all -w @newport/api` ثم `npm run seed`.
 
 ---
