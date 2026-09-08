@@ -5,6 +5,8 @@
  *  - ملاحظة API: `embedded-postgres` يقبل كائن خيارات واحدًا (لا مجلد + خيارات)؛ التمرير الخاطئ
  *    كان يُسقط port/databaseDir صامتًا فتشتغل القاعدة على 5432 وفي ./data/db خارج gitignore
  *  - ينشئ المستخدم/القاعدة `newport` إن لم يكونا موجودين
+ *  - يعمل في المقدمة (لا ينتهي): شغّله في طرفية مستقلة أو `&`
+ * ملاحظة تسمية: `server` لمحرّك embedded-postgres و`pg` لمكتبة العملاء — لا يتصادمان
  * ملاحظة: أداة تطوير/تحقق فقط؛ الإنتاج = postgres:16-alpine في deploy/docker-compose.yml
  */
 import Postgres from 'embedded-postgres';
@@ -42,7 +44,7 @@ if (existsSync(bundledLib)) {
     }
   }
 }
-const pg = new Postgres({
+const server = new Postgres({
   databaseDir: dataDir,
   user: 'postgres',
   password: 'postgres',
@@ -60,11 +62,11 @@ const pg = new Postgres({
 });
 
 console.log(`→ embedded postgres (data: ${dataDir})`);
-await pg.initialise();
-await pg.start();
+await server.initialise();
+await server.start();
 
->* التهيئة بموكل pg مباشر على قاعدة postgres: `pg.getPgClient()` يحاول الاتصال بالقاعدة الهدف
-// (newport) التي لم تُنشأ بعد، فيتوقف النص بلا رسالة — وهذا بالضبط ما عطّل التحقق على نسخة جديدة.
+// التهيئة بموكل pg مباشر على قاعدة postgres: getPgClient() يحاول الاتصال بالقاعدة الهدف
+// (newport) التي لم تُنشأ بعد، فيتوقف النص بلا رسالة — وهذا ما عطّل التحقق على نسخة جديدة.
 const admin = new pg.Client({ host: '127.0.0.1', port: PORT, user: 'postgres', password: 'postgres', database: 'postgres' });
 await admin.connect();
 for (const sql of [`CREATE ROLE newport LOGIN SUPERUSER PASSWORD 'newport'`, `CREATE DATABASE newport OWNER newport`]) {
@@ -76,7 +78,7 @@ console.log(`READY DATABASE_URL=postgresql://newport:newport@127.0.0.1:${PORT}/n
 console.log('Ctrl-C للإيقاف');
 
 process.on('SIGINT', async () => {
-  await pg.stop().catch(() => {});
+  await server.stop().catch(() => {});
   process.exit(0);
 });
 await new Promise(() => {});

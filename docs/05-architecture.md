@@ -320,6 +320,7 @@ src/ui/kit.tsx       RTL، أزرار كبيرة، قوائم اختيار بد�
 | `apps/api/test/schema-contract.spec.ts` | 5 | كل اسم جدول/عمود مستعمل في `SYNC_META`/`ENTITY_MAP` موجود في `schema.prisma`؛ لا snake_case ولا `#` في SQL الترحيل |
 | `apps/api/test/sync-triggers.spec.ts` | 5 | **على قاعدة حيّة**: registry=19، `trg_sync` مرة لكل جدول، `trg_bump_version` لا يمس `users`، `fn_align_number_sequences()`، لا سطر `#` |
 | `apps/api/test/serialization.spec.ts` | 3 | BigInt → JSON (صغير رقم، كبير نص، تثبيت مزدوج آمن) |
+| `apps/api/test/scripts-parse.spec.ts` | 4 | كل `scripts/*.mjs` تُحلَّل كـJS صالح — نص تعطّل على نسخة جديدة كان يسقط بصمت (تصادم اسم مع `import` وسطر بقايا diff)
 | `apps/api/test/root-index.spec.ts` | 5 | بطاقة الجذر: شكلها، تهريب الوسوم القادمة من البيئة، مفاصلة HTML/JSON، وأنها لا تبتلع أي مسار آخر |
 | `apps/api/test/document-store.spec.ts` | 8 | التوكن الموقّع (HMAC/انتهاء/حمولة معدّلة)، رفض أنواع خطرة (SVG/EXE)، حراسة `../` في المسار، و`wx` ضد استبدال بايتات مسجّلة |
 | `apps/api/test/error-contract.spec.ts` | 3 | عقد الأخطاء (4xx يحافظ على الحقول، ترجمة، 5xx بكتمان + errorId) |
@@ -327,7 +328,7 @@ src/ui/kit.tsx       RTL، أزرار كبيرة، قوائم اختيار بد�
 | `scripts/e2e-smoke.mjs` | 37 | HTTP حيّ: جاهزية، جلسة، قيد تغيير كلمة المرور، تدوير refresh + كشف إعادة الاستعمال، تطابق الهيكل/الصلاحيات، دورة أمر شغل، رفض انتقال 409، مزامنة push/pull/idempotency/الحماية، سجل تدقيق، ختم `syncSeq` |
 
 ```bash
-npm run test:all && npm run typecheck:all            # 146 فحصًا + typecheck نظيف (4 حِزَم)
+npm run test:all && npm run typecheck:all            # 150 فحصًا + typecheck نظيف (4 حِزَم)
 API_URL=… npm run e2e -w @newport/api                # 74/74
 npm run docs:all -w @newport/api                     # مصفوفة + 03 + DDL + كتالوج (وتفحص أن كل رمز مذكور حقيقي)
 ```
