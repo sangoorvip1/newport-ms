@@ -314,7 +314,8 @@ src/ui/kit.tsx       RTL، أزرار كبيرة، قوائم اختيار بد�
 
 | مجموعة | عدد | ماذا تغطي |
 |---|---|---|
-| `packages/domain` | 71 | سلامة السجل (91/21/13)، عدم وجود منح أوسع من `maxScope`، الحد الأدنى الميداني ممنوح ولا يُمنح للقراءة فقط، `buildMatrix` = `resolveGrants`، آلة الحالة، SLA، دوال البصمة، عميل المزامنة (طابور/backoff/دمج/full-resync) |
+| `packages/domain` | 94 | سلامة السجل (94/21/13)، عدم وجود منح أوسع من `maxScope`، الحد الأدنى الميداني ممنوح ولا يُمنح للقراءة فقط، `buildMatrix` = `resolveGrants`، آلة الحالة، SLA، دوال البصمة، عميل المزامنة (طابور/backoff/دمج/full-resync)، **وسائط استعلام قوائم القراءة** (`queryFlag`/`pageFields`/`isoDateField`/enums) — وهي البوابة التي كانت تُرجع 500، وتُطبَّق في المتحكمات بـ `ZodPipe` |
+
 | `apps/api/test/lab-scope.spec.ts` | 11 | نطاق المختبر: توسيع شعبة kind=LAB إلى القسم، **ولا يُوسَّع SELF**، حارس ملكية العينة عند الإنشاء، و403 مفسَّر |
 | `apps/api/test/access-sync.spec.ts` | 16 | الحارس: منح/نطاق/`DENIED_COLUMNS`/append_only/idempotency/رفض DELETE على سجلات حدثية/`buildScopeWhere` |
 | `apps/api/test/schema-contract.spec.ts` | 5 | كل اسم جدول/عمود مستعمل في `SYNC_META`/`ENTITY_MAP` موجود في `schema.prisma`؛ لا snake_case ولا `#` في SQL الترحيل |
@@ -326,11 +327,11 @@ src/ui/kit.tsx       RTL، أزرار كبيرة، قوائم اختيار بد�
 | `apps/api/test/document-store.spec.ts` | 8 | التوكن الموقّع (HMAC/انتهاء/حمولة معدّلة)، رفض أنواع خطرة (SVG/EXE)، حراسة `../` في المسار، و`wx` ضد استبدال بايتات مسجّلة |
 | `apps/api/test/error-contract.spec.ts` | 3 | عقد الأخطاء (4xx يحافظ على الحقول، ترجمة، 5xx بكتمان + errorId) |
 | `apps/mobile/tests` | 8 | الطابور، التجميع، الإرسال، الدمج، قطع الشبكة |
-| `scripts/e2e-smoke.mjs` | 37 | HTTP حيّ: جاهزية، جلسة، قيد تغيير كلمة المرور، تدوير refresh + كشف إعادة الاستعمال، تطابق الهيكل/الصلاحيات، دورة أمر شغل، رفض انتقال 409، مزامنة push/pull/idempotency/الحماية، سجل تدقيق، ختم `syncSeq` |
+| `scripts/e2e-smoke.mjs` | 83 | HTTP حيّ: جاهزية، جلسة، قيد تغيير كلمة المرور، تدوير refresh + كشف إعادة الاستعمال، تطابق الهيكل/الصلاحيات، دورة أمر شغل، رفض انتقال 409، مزامنة push/pull/idempotency/الحماية، سجل تدقيق، ختم `syncSeq`، **بطاقة الجذر**، **14 فلترًا خبيثًا لا يجوز أن ترجع 5xx**، و**إنشاء سجل من جهاز بلا اتصال برقم عمل من تسلسل القاعدة** |
 
 ```bash
-npm run test:all && npm run typecheck:all            # 153 فحصًا + typecheck نظيف (4 حِزَم)
-API_URL=… npm run e2e -w @newport/api                # 74/74
+npm run test:all && npm run typecheck:all            # 165 فحصًا + typecheck نظيف (4 حِزَم)
+API_URL=… npm run e2e -w @newport/api                # 83/83
 npm run docs:all -w @newport/api                     # مصفوفة + 03 + DDL + كتالوج (وتفحص أن كل رمز مذكور حقيقي)
 ```
 

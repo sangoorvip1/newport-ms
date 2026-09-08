@@ -74,10 +74,10 @@ npm run build -w @newport/api && npm run start -w @newport/api     # http://127.
 فوق كل ما يلي مُنفَّذ في هذه البيئة، لا على الورق:
 
 ```bash
-npm run test:all          # domain 82 · api 63 (منها 4 على قاعدة حيّة) · mobile 8  = 153 فحصًا
+npm run test:all          # domain 94 · api 63 (منها 4 على قاعدة حيّة) · mobile 8  = 165 فحصًا
 npm run typecheck:all     # domain · api · desktop (renderer+electron) · mobile — بلا أخطاء
 npm run docs:all -w @newport/api   # مصفوفة الوصول + docs/03 + DDL + كتالوج المخطط (كلها مشتقة من الكود)
-npm run e2e -w @newport/api   # 74/74 فحص HTTP حيّ (منها 5 لبطاقة تعريف الخدمة على /)
+npm run e2e -w @newport/api   # 83/83 فحص HTTP حيّ (منها 5 لبطاقة الخدمة، 14 لفلترات سيئة، و5 للإنشاء بلا اتصال)
 ```
 
 - `GET /api/health/ready` → `{"database":"ok","organization":"3 dept / 13 sub-dept (reference: 3/13)","rbac":"21/21 roles, 94/94 permissions","openConflicts":"0"}`

@@ -18,6 +18,13 @@ import {
 import { PrismaService } from '../common/prisma.service.js';
 import type { AccessContext } from '../security/access.guard.js';
 
+/**
+ * صيغة uuid (v4 وv7 معًا) — تُستعمل للرفض قبل أي استعلام خام، لا بديلًا عن فحص الـDTO:
+ * `recordId` مسموح في العقد بين 8 و64 حرفًا (قيود عملاء قدامى)، لكن أعمدة المفاتيح كلها uuid،
+ * فغير الصالح منها كان يسقط الدفعة كلها بـ500 بدل أن يُرفض سجله وحده بسببً مفهومًا.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** كيان المزامنة ↔ جدول PostgreSQL ↔ أعمدة يُسمح للخادم بختامها */
 interface EntityMap {
   table: string;
@@ -28,6 +35,17 @@ interface EntityMap {
   /** حقول يختمها الخادم دائمًا ولا تُقبل من العميل */
   stamp: Record<string, string>;
 }
+
+/**
+ * سجلات تحمل رقم عمل (business number). بلا هذا يختمه مسار REST وحده، فيُنشأ سجل بلا رقم من جهاز
+ * بلا اتصال — و`lab_samples.sampleNumber` NOT NULL فيُرفض الإدراج أصلًا. القياس: أمر شغل أُنشئ
+ * من الهاتف و`number` فيه null. التوليد من نفس دالة القاعدة `next_business_number` حتى لا يختلف
+ * الرقم باختلاف القناة (نفس التسلسل ⇒ لا تكرار، ونفس البادئة/العقد).
+ */
+const NUMBER_STAMP: Partial<Record<SyncEntity, { col: string; seq: string; prefix: string }>> = {
+  workOrder: { col: 'number', seq: 'wo_number_seq', prefix: 'WO' },
+  labSample: { col: 'sampleNumber', seq: 'lab_sample_number_seq', prefix: 'SMP' },
+};
 
 const ENTITY_MAP: Record<SyncEntity, EntityMap> = {
   workOrder: { table: 'work_orders', subDeptColumn: '"subDeptId"', departmentColumn: '"departmentId"', creatorColumn: '"createdById"', stamp: {} },
@@ -52,12 +70,16 @@ const ENTITY_MAP: Record<SyncEntity, EntityMap> = {
 };
 
 /** الأعمدة الفعلية لكل جدول — تُقرأ مرة واحدة من information_schema ثم تُخزَّن في الذاكرة */
-type ColumnMeta = { column: string; type: string; notNull: boolean; hasDefault: boolean };
+/** `udt` = اسم النوع الحقيقي من الـcatalog: وحده ما يصلح لصيغة التحويل، لأن enums تظهر في information_schema باسم USER-DEFINED */
+type ColumnMeta = { column: string; type: string; udt: string; notNull: boolean; hasDefault: boolean };
 
 @Injectable()
 export class SyncEngineService {
   private readonly logger = new Logger(SyncEngineService.name);
   private readonly columnsCache = new Map<string, ColumnMeta[]>();
+  /** أنواع الأعمدة لكل جدول (لأغراض الصرائر في SQL الخام) — أوسع من columnsCache ولا تُرشَّح فيها شيء */
+  private readonly typesCache = new Map<string, Map<string, string>>();
+  private readonly auditCache = new Map<string, string[]>();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -92,6 +114,12 @@ export class SyncEngineService {
     const map = ENTITY_MAP[op.entity];
     if (!meta || !map) return { ...base, outcome: 'REJECTED', reasonAr: 'كيان غير معروف' };
 
+    // كل مفاتيح جداول المزامنة uuid: لو تُرِك recordId كما هو لوصل إلى استعلام خام يفشل
+    // بـ22P02 فتعود الدفعة كلها 500. الرفض هنا لكل عملية وحدها، فيُصلح العميل سجله ويعيد إرساله.
+    if (!UUID_RE.test(op.recordId)) {
+      return { ...base, outcome: 'REJECTED', reasonAr: 'recordId يجب أن يكون uuid صالحًا (يولّد العميل uuid v7) — العملية مرفوضة ولم تُطبَّق' };
+    }
+
     // 1) Idempotency: إعادة إرسال نفس العملية بعد انقطاع الشبكة لا تُنتج تكرارًا
     const dup = await this.prisma.$queryRaw<Array<{ "opId": string }>>`SELECT "opId" FROM sync_idempotency WHERE "opId" = ${op.opId} LIMIT 1`;
     if (dup.length) {
@@ -122,13 +150,13 @@ export class SyncEngineService {
       return { ...base, outcome: 'REJECTED', reasonAr: 'سجل حدثي لا يُحذف (append-only)' };
     }
 
-    // 3) النطاق: لا يُقبل تعديل سجلات خارج شعبة المستخدم/قسمه (ما لم يكن facility-wide)
-    if (op.kind !== 'UPSERT' || !map.stamp.workOrderId) {
-      const inside = await this.recordInScope(op.entity, op.recordId, access, op.kind === 'UPSERT');
-      if (inside === false) return { ...base, outcome: 'REJECTED', reasonAr: 'السجل خارج نطاق صلاحياتك' };
-    }
-
     try {
+      // 3) النطاق: لا يُقبل تعديل سجلات خارج شعبة المستخدم/قسمه (ما لم يكن facility-wide)
+      // داخل try لأن فحص النطاق استعلام خام — أي مفاجئة منه تُرد على العملية وحدها لا على الدفعة.
+      if (op.kind !== 'UPSERT' || !map.stamp.workOrderId) {
+        const inside = await this.recordInScope(op.entity, op.recordId, access, op.kind === 'UPSERT');
+        if (inside === false) return { ...base, outcome: 'REJECTED', reasonAr: 'السجل خارج نطاق صلاحياتك' };
+      }
       if (op.kind === 'DELETE') return await this.applyDelete(op, access, base);
       return await this.applyWrite(op, req, access, base);
     } catch (e) {
@@ -203,29 +231,51 @@ export class SyncEngineService {
       }
       const data = { ...incoming, ...stamp };
       if (Object.keys(data).length === 0) return { ...base, outcome: 'REJECTED', reasonAr: 'لا توجد حقول صالحة' };
+      // رقم العمل يُختم من الخادم دائمًا: نسخة العميل المحليّة (قد تكون «WO-1» على الجهاز) تُستبدل،
+      // وإلا تصادم الرقم مع سجل من قناة أخرى أو تكرّر داخل الجهاز نفسه بعد إعادة التسمية.
+      const numSpec = NUMBER_STAMP[op.entity];
+      if (numSpec) {
+        const gen = await this.prisma.$queryRawUnsafe<Array<{ n: string }>>(
+          `SELECT next_business_number($1::regclass, $2, EXTRACT(YEAR FROM now())::int, 6) AS n`,
+          numSpec.seq,
+          numSpec.prefix,
+        );
+        if (!gen[0]?.n) return { ...base, outcome: 'REJECTED', reasonAr: 'تعذّر توليد رقم السجل من التسلسل — أعد المزامنة' };
+        data[numSpec.col] = gen[0].n;
+      }
       // الأعمدة الفعلية للجدول فقط: ليست كل الجداول تحمل version/clientOpId/isOfflineCreated
       const hasCol = (n: string) => cols.some((c) => c.column === n);
       const values: unknown[] = [op.recordId];
       const colNames: string[] = ['id'];
+      const castCols: string[] = ['id'];
       for (const c of Object.keys(data)) {
         colNames.push(`"${c}"`);
+        castCols.push(c);
         values.push(encode(data[c]));
       }
       if (hasCol('version')) {
         colNames.push('"version"');
+        castCols.push('version');
         values.push(1);
       }
       if (hasCol('clientOpId')) {
         colNames.push('"clientOpId"');
+        castCols.push('clientOpId');
         values.push(op.opId);
       }
       if (hasCol('isOfflineCreated')) {
         colNames.push('"isOfflineCreated"');
+        castCols.push('isOfflineCreated');
         values.push(true);
       }
-      const placeholders = values.map((_, i) => (i === 0 ? '$1::uuid' : `$${i + 1}`)).join(', ');
+      // برزما يملأ @createdAt/@updatedAt من تلقاء نفسه عند create()، أما SQL الخام فيتخطّاهما؛ وtouch هنا
+      // على UPDATE فقط (قيس بـ pg_get_triggerdef: trg_touch :: BEFORE UPDATE) ⇒ كل إنشاء بلا اتصال كان
+      // يسقط بقيد NOT NULL على updatedAt. تُختم هنا بالوقت الحالي بدل أن تُرسَل قيم من العميل.
+      const auditCols = (await this.timeStampsToFill(map.table)).filter((n) => !(n in data));
+      const types = await this.columnTypes(map.table);
+      const placeholders = values.map((_, i) => `$${i + 1}${this.castFor(types, castCols[i]!)}`);
       await this.prisma.$executeRawUnsafe(
-        `INSERT INTO ${map.table} (${colNames.join(', ')}) VALUES (${placeholders})`,
+        `INSERT INTO ${map.table} (${[...colNames, ...auditCols.map((n) => `"${n}"`)].join(', ')}) VALUES (${[...placeholders, ...auditCols.map(() => 'now()')].join(', ')})`,
         ...values,
       );
       return await this.success(base, op, 'APPLIED', undefined, access);
@@ -261,8 +311,9 @@ export class SyncEngineService {
       return await this.success(base, op, 'APPLIED', undefined, access);
     }
     const keys = Object.keys(changed);
+    const updTypes = await this.columnTypes(map.table); // أنواع الأعمدة كاملة — لا تُرشَّح عبر DENIED_COLUMNS
     await this.prisma.$executeRawUnsafe(
-      `UPDATE ${map.table} SET ${keys.map((k) => `"${k}" = $${keys.indexOf(k) + 2}`).join(', ')} WHERE id = $1::uuid`,
+      `UPDATE ${map.table} SET ${keys.map((k) => `"${k}" = $${keys.indexOf(k) + 2}${this.castFor(updTypes, k)}`).join(', ')} WHERE id = $1::uuid`,
       op.recordId,
       ...keys.map((k) => encode(changed[k])),
     );
@@ -401,12 +452,65 @@ export class SyncEngineService {
     return decodeRow(row);
   }
 
+  /**
+   * تحويل صريح لكل معامل إلى نوع عموده: `encode()` يُرجع نصًا دائمًا (يوحّد JSON/التواريخ)،
+   * وPostgreSQL لا يُسند `text` إلى uuid/numeric/timestamptz/enum — فيفشل الإدراج بـ42804
+   * ويُسقَط الطلب 500. القياس على الحالة الحيّة: كل إنشاء من جهاز بلا اتصال كان يُرفض بهذا
+   * الخطأ على `work_orders."facilityId"`، والحالة الوحيدة التي نجحت هي تحديثات الحقول النصية.
+   * النوع يؤخذ من `udt_name` لا `data_type`، لأن الأعمدة المعدّدة (status/priority) تظهر باسم
+   * USER-DEFINED في information_schema بينما اسمها الحقيقي `"WoStatus"` — وهو ما تحتاجه الصريحة.
+   */
+  /**
+   * أعمدة الوقت الإلزامية التي لا default لها — تُقرأ من الـcatalog مباشرة، لا من `safeColumns`:
+   * تلك القائمة تُرشِّح DENIED_COLUMNS (createdAt/updatedAt ممنوعان على العميل) فاختفتا من cols
+   * ولم تُختمَا، وبقي الإدراج الخام يسقط بقيد NOT NULL. القياس: `"createdAt", "updatedAt"` غابتا
+   * عن INSERT رغم الصرائر، والخطأ بقي `null value in column "updatedAt"`.
+   */
+  private async timeStampsToFill(table: string): Promise<string[]> {
+    const hit = this.auditCache.get(table);
+    if (hit) return hit;
+    const rows = await this.prisma.$queryRawUnsafe<Array<{ column: string }>>(
+      `SELECT column_name AS "column" FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = $1
+          AND is_nullable = 'NO' AND column_default IS NULL
+          AND column_name IN ('createdAt', 'updatedAt')`,
+      table,
+    );
+    const cols = rows.map((r) => r.column);
+    this.auditCache.set(table, cols);
+    return cols;
+  }
+
+  private async columnTypes(table: string): Promise<Map<string, string>> {
+    const hit = this.typesCache.get(table);
+    if (hit) return hit;
+    const rows = await this.prisma.$queryRawUnsafe<Array<{ column: string; udt: string }>>(
+      `SELECT column_name AS "column", udt_name AS "udt"
+         FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`,
+      table,
+    );
+    const map = new Map(rows.map((r) => [r.column, r.udt]));
+    this.typesCache.set(table, map);
+    return map;
+  }
+
+  /**
+   * تُقرأ الأنواع من جدول كامل الأعمدة، لا من `safeColumns`: قائمة DENIED_columns تحرم العميل من
+   * facilityId/departmentId فتُسقطهما من cols، بينما يختمهما الخادم (serverStamp) ثم يُدرجهما —
+   * فلو استُخدمت cols للبحث عن النوع لبقي المعامل بلا صريحة وعاد الخطأ الذي جئنا نصلحه (42804).
+   */
+  private castFor(types: Map<string, string>, name: string): string {
+    const udt = types.get(name);
+    // الأسماء كلها من الـcatalog لا من مُدخَل العميل، لذا الاقتباس الدائم آمن ويحمي الأسماء مختلطة الحروف مثل "WoStatus"
+    return udt ? `::"${udt}"` : '';
+  }
+
   private async safeColumns(table: string): Promise<ColumnMeta[]> {
     const hit = this.columnsCache.get(table);
     if (hit) return hit;
     // SQL خام مع ربط المعامل بالمواضع $1/$2 (المحرك يستعلم عن جداول باسم حرفي من جدول الربط)
-    const rows = await this.prisma.$queryRawUnsafe<Array<{ column: string; type: string; notNull: boolean; hasDefault: boolean }>>(
-      `SELECT column_name AS "column", data_type AS "type", (is_nullable = 'NO') AS "notNull", (column_default IS NOT NULL) AS "hasDefault"
+    const rows = await this.prisma.$queryRawUnsafe<Array<{ column: string; type: string; udt: string; notNull: boolean; hasDefault: boolean }>>(
+      `SELECT column_name AS "column", data_type AS "type", udt_name AS "udt", (is_nullable = 'NO') AS "notNull", (column_default IS NOT NULL) AS "hasDefault"
          FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`,
       table,
     );

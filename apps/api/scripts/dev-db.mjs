@@ -62,7 +62,11 @@ const server = new Postgres({
 });
 
 console.log(`→ embedded postgres (data: ${dataDir})`);
-await server.initialise();
+// initdb يرفض مجلدًا غير فارغ: بلا هذا الشرط كان النص يموت عند كل إقلاع ثانٍ بعد أول تهيئة
+// (أي بعد إعادة تشغيل الجهاز مباشرة)، بينما النص مدعوّ ليُعاد تشغيله لا ليُنشئ من جديد.
+const freshCluster = !existsSync(join(dataDir, 'PG_VERSION'));
+if (freshCluster) await server.initialise();
+else console.log('· عنقود موجود — تُخطى التهيئة ويبدأ التشغيل مباشرة');
 await server.start();
 
 // التهيئة بموكل pg مباشر على قاعدة postgres: getPgClient() يحاول الاتصال بالقاعدة الهدف

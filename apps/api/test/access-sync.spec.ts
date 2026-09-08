@@ -99,16 +99,28 @@ function fakePrismaFor(userOverrides: Record<string, unknown> = {}, permissions:
 /* ════════════════════ بدائل محرك المزامنة ════════════════════ */
 
 /** أعمدة جدول work_orders كما يراها discoverColumns (مقتطف يمثل الواقع) */
+// كما هي في القاعدة: udt_name هو ما تُبنى منه الصريحة، وcreatedAt/updatedAt/facilityId موجودة هنا
+// رغم أنها ممنوعة على العميل — المحرك هو من يرشّح DENIED_COLUMNS، لا جدول information_schema.
 const COLUMNS = [
-  { column: 'id', type: 'uuid', notNull: true, hasDefault: true },
-  { column: 'title', type: 'character varying', notNull: true, hasDefault: false },
-  { column: 'description', type: 'text', notNull: true, hasDefault: false },
-  { column: 'status', type: 'enum', notNull: true, hasDefault: true },
-  { column: 'actualEndAt', type: 'timestamp', notNull: false, hasDefault: false },
-  { column: 'subDeptId', type: 'uuid', notNull: false, hasDefault: false },
-  { column: 'createdById', type: 'uuid', notNull: true, hasDefault: false },
-  { column: 'facilityId', type: 'uuid', notNull: true, hasDefault: false },
-  { column: 'deletedAt', type: 'timestamp', notNull: false, hasDefault: false },
+  { column: 'id', type: 'uuid', udt: 'uuid', notNull: true, hasDefault: false },
+  { column: 'number', type: 'character varying', udt: 'varchar', notNull: true, hasDefault: false },
+  { column: 'title', type: 'character varying', udt: 'varchar', notNull: true, hasDefault: false },
+  { column: 'description', type: 'text', udt: 'text', notNull: true, hasDefault: false },
+  { column: 'status', type: 'USER-DEFINED', udt: 'WoStatus', notNull: true, hasDefault: true },
+  { column: 'priority', type: 'USER-DEFINED', udt: 'WoPriority', notNull: true, hasDefault: true },
+  { column: 'estHours', type: 'numeric', udt: 'numeric', notNull: false, hasDefault: false },
+  { column: 'actualEndAt', type: 'timestamp without time zone', udt: 'timestamp', notNull: false, hasDefault: false },
+  { column: 'planStartAt', type: 'timestamp without time zone', udt: 'timestamp', notNull: false, hasDefault: false },
+  { column: 'subDeptId', type: 'uuid', udt: 'uuid', notNull: false, hasDefault: false },
+  { column: 'createdById', type: 'uuid', udt: 'uuid', notNull: true, hasDefault: false },
+  { column: 'facilityId', type: 'uuid', udt: 'uuid', notNull: true, hasDefault: false },
+  { column: 'departmentId', type: 'uuid', udt: 'uuid', notNull: true, hasDefault: false }, // يختمها serverStamp في كل أمر شغل
+  { column: 'deletedAt', type: 'timestamp without time zone', udt: 'timestamp', notNull: false, hasDefault: false },
+  { column: 'createdAt', type: 'timestamp without time zone', udt: 'timestamp', notNull: true, hasDefault: false },
+  { column: 'updatedAt', type: 'timestamp without time zone', udt: 'timestamp', notNull: true, hasDefault: false },
+  { column: 'version', type: 'integer', udt: 'int4', notNull: true, hasDefault: true },
+  { column: 'clientOpId', type: 'character varying', udt: 'varchar', notNull: false, hasDefault: false },
+  { column: 'isOfflineCreated', type: 'boolean', udt: 'bool', notNull: true, hasDefault: true },
 ];
 
 /**
@@ -142,6 +154,11 @@ function syncFake(opts: { existing?: Record<string, unknown> | null; dupOp?: boo
         const forced = opts.rawRows(sql);
         if (forced !== undefined) return forced;
       }
+      if (sql.includes("AND column_name IN ('createdAt', 'updatedAt')")) {
+        // طلب «أي أعمدة وقت إلزامية بلا default»: يُجاب بدقّة، لا بإرجاع كل الأعمدة (وإلا تكرّر id في الإدراج)
+        return (opts.columns ?? COLUMNS).filter((c) => c.column === 'createdAt' || c.column === 'updatedAt').map((c) => ({ column: c.column }));
+      }
+      if (sql.includes('next_business_number')) return [{ n: 'WO-2026-000099' }]; // رقم العمل يُولّد في القاعدة
       if (sql.includes('information_schema.columns')) return opts.columns ?? COLUMNS;
       if (sql.includes('WHERE id = $1::uuid LIMIT 1')) return opts.existing && Object.keys(opts.existing).length ? [opts.existing] : [];
       if (sql.includes('SELECT 1 FROM')) return [{ one: 1 }];
@@ -342,7 +359,15 @@ describe('SyncEngineService.push', () => {
           entity: 'workOrder',
           recordId: RECORD_ID,
           kind: 'UPSERT',
-          data: { title: 'Pump seal leak', description: 'observed during round', createdById: 'attacker', facilityId: 'other-facility' },
+          data: {
+            title: 'Pump seal leak',
+            description: 'observed during round',
+            priority: 'HIGH', // enum في القاعدة: يحتاج صريحة وإلا 42804
+            estHours: 2, // numeric: نصّ العميل لا يُسند إليه مباشرة
+            planStartAt: '2026-09-09T06:00:00.000Z', // timestamp
+            createdById: 'attacker',
+            facilityId: 'other-facility',
+          },
         },
       ]),
       access([['sync.push', 'SUBDEPT'], ['maint.wo.create', 'SUBDEPT'], ['maint.wo.view', 'SUBDEPT']]),
@@ -352,6 +377,21 @@ describe('SyncEngineService.push', () => {
     expect(insert!.params).not.toContain('attacker'); // هوية المستخدم لا تأتي من العميل
     expect(insert!.sql).toContain('"createdById"'); // بل يُختم من قبل الخادم
     expect(insert!.sql).toContain('"facilityId"');
+    // صريحة لكل معامل بحسب نوع عموده: encode() يُرجع نصًا، وPostgreSQL لا يُسند text إلى uuid/numeric/enum
+    expect(insert!.sql).toContain('$1::"uuid"');
+    expect(insert!.sql).toMatch(/"facilityId" = |\$\d+::"uuid"/);
+    expect(insert!.sql).toContain('::"numeric"');
+    expect(insert!.sql).toContain('::"WoPriority"');
+    expect(insert!.sql).toContain('::"timestamp"');
+    // لا يُترك أي معامل بلا صريحة: نصّ واحد خارج القاعدة يكفي لإسقاط الإدراج كله بـ42804
+    const ph = insert!.sql.match(/\$\d+/g) ?? [];
+    const casted = insert!.sql.match(/\$\d+::"/g) ?? [];
+    expect(casted.length).toBe(ph.length);
+    // أوقات لا تملؤها القاعدة على INSERT (trg_touch على UPDATE وحده) + رقم عمل من نفس تسلسل مسار REST
+    expect(insert!.sql).toContain('"createdAt"');
+    expect(insert!.sql).toContain('"updatedAt"');
+    expect(insert!.sql).toContain('now()');
+    expect(insert!.params).toContain('WO-2026-000099');
     expect(calls.some((c) => c.sql.includes('sync_conflicts'))).toBe(true);
   });
 

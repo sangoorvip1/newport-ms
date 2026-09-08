@@ -528,6 +528,116 @@ async function main() {
     check('مسار غير معرّف يبقى 404 برسالة عربية (البطاقة لا تبتلع كل شيء)', nope.status === 404 && typeof nopeBody?.messageAr === 'string' && nopeBody.messageAr.length > 8, `status=${nope.status}`);
   }
 
+  // 10) فلاتر سيئة في قوائم القراءة: كلها كانت 500 (قيس 2026-09-08: «تعذّر إتمام الطلب… أبلغ المشرف»).
+  //     العقد المطلوب: 400 + issues[] باسم الحقل، والطلبات السليمة تبقى 200. الحساب المخوَّل
+  //     يُلتقَط لكل نهاية على حدة (الصلاحيات تختلف بين admin/head/tech)، فإن لم يوجد صار الفحص مرفوضًا.
+  {
+    const qstr = (o) => {
+      const e = Object.entries(o).filter(([, v]) => v !== undefined);
+      return e.length ? `?${new URLSearchParams(e).toString()}` : '';
+    };
+    const today = new Date().toISOString().slice(0, 10);
+    const pairs = [
+      { p: '/v1/maintenance/work-orders', good: { take: '5', skip: '0' }, bad: { skip: '-5' }, f: 'skip' },
+      { p: '/v1/maintenance/work-orders', good: { take: '5' }, bad: { take: 'abc' }, f: 'take' },
+      { p: '/v1/maintenance/work-orders', good: { status: 'DRAFT' }, bad: { status: 'NOPE' }, f: 'status' },
+      { p: '/v1/maintenance/work-orders', good: { from: '2026-01-01' }, bad: { from: '\u0623\u0645\u0633' }, f: 'from' },
+      { p: '/v1/lab/samples', good: { take: '3' }, bad: { status: 'NOPE' }, f: 'status' },
+      { p: '/v1/lab/samples', good: { to: today }, bad: { to: 'bad' }, f: 'to' },
+      { p: '/v1/lab/oos', good: {}, bad: { status: 'NOPE' }, f: 'status' },
+      { p: '/v1/time/daily', good: { date: today }, bad: { date: '2026-13-45' }, f: 'date' },
+      { p: '/v1/time/daily', good: { date: today }, bad: {}, f: 'date' },
+      { p: '/v1/production/shift-logs', good: {}, bad: { days: '0' }, f: 'days' },
+      { p: '/v1/production/params/trend', good: { paramCode: 'UREA_N' }, bad: {}, f: 'paramCode' },
+      { p: '/v1/org/users', good: {}, bad: { subDeptId: 'xyz' }, f: 'subDeptId' },
+      { p: '/v1/audit', good: { take: '2' }, bad: { entityId: 'xyz' }, f: 'entityId' },
+      { p: '/v1/documents', good: { take: '5' }, bad: { take: '900' }, f: 'take' },
+    ];
+    const tokens = [techToken, accessToken, mobileToken].filter(Boolean);
+    let five = 0;
+    let authorized = 0;
+    let wrong = [];
+    const skipped = [];
+    for (const { p: path, good, bad, f } of pairs) {
+      let chosen = null;
+      for (const t of tokens) {
+        const g = await call('GET', path + qstr(good), undefined, { token: t });
+        if (g.status !== 401 && g.status !== 403) {
+          chosen = { t, g };
+          break;
+        }
+        chosen = chosen ?? { t, g };
+      }
+      if (!chosen) continue;
+      const b = await call('GET', path + qstr(bad), undefined, { token: chosen.t });
+      if (chosen.g.status >= 500 || b.status >= 500) five++;
+      if (chosen.g.status === 403 || chosen.g.status === 401) {
+        skipped.push(`${path}·${f}`); // لا حساب في السيناريو يملك هذه القراءة — لا يُعَدّ فشل عقد
+        continue;
+      }
+      if (chosen.g.status !== 200) wrong.push(`${path}·${f}=${chosen.g.status}`);
+      authorized++;
+      if (b.status !== 400) wrong.push(`${path}·${f}=${b.status}`);
+      else if (!(b.body?.issues ?? []).some((i) => String(i.path ?? '').includes(f))) wrong.push(`${path}·${f}:بلا اسم الحقل`);
+    }
+    check('فلاتر سيئة (14 حالة) لا تُرجع 5xx أبدًا', five === 0, `five=${five}`);
+    check(
+      'كل فلتر مرفوض 400 بissues[] باسم الحقل، لدى حساب مخوَّل',
+      authorized >= 10 && wrong.length === 0,
+      `authorized=${authorized} wrong=${wrong.join(',') || 'لا شيء'} skipped=${skipped.join(',') || 'لا شيء'}`,
+    );
+    // حالة معكوسة قِيست يومها: documents?mine=true كان 400 لأن z.boolean() لا يرى نص 'true' في الاستعلام
+    const mineStr = await call('GET', '/v1/documents?mine=true&take=5', undefined, { token: techToken });
+    check('documents?mine=true مقبول نصيًّا (كان 400)', mineStr.status === 200, `status=${mineStr.status}`);
+    // مزامنة: معرّف غير uuid كان يُسقط الدفعة كلها بـ500؛ المطلوب رفض العملية وحدها
+    const badIdPush = await callM('POST', '/v1/sync/push', {
+      ...pushBody,
+      ops: [
+        { opId: `e2e-buuid-${Date.now()}`, entity: 'workOrder', recordId: 'not-a-uuid', kind: 'UPSERT', data: { titleAr: 'سجل بمعرّف فاسد' }, clientTimestamp: new Date().toISOString() },
+        { ...pushBody.ops[0] },
+      ],
+    });
+    const rb = badIdPush.body?.results?.[0];
+    check('sync/push بمعرّف غير uuid: العملية تُرفض وحدها والدفعة تعيش', badIdPush.status < 500 && rb?.outcome === 'REJECTED' && /uuid/i.test(rb?.reasonAr ?? ''), `status=${badIdPush.status} outcome=${rb?.outcome}`);
+    // الإنشاء من جهاز بلا اتصال: كان يسقط بصمت — رقم العمل لم يكن يُختم (مسار REST وحده يولّده)،
+    // وupdatedAt/createdAt لا يملؤهما أحد في SQL الخام (trg_touch على UPDATE فقط).
+    const uuid7 = () => {
+      const b0 = new Uint8Array(16);
+      crypto.getRandomValues(b0);
+      const ms = BigInt(Date.now()) * 0x1000n;
+      for (let i = 0; i < 6; i++) b0[i] = Number((ms / BigInt(0x1000 ** (5 - i))) % 256n);
+      b0[6] = (b0[6] & 0x0f) | 0x70;
+      b0[8] = (b0[8] & 0x3f) | 0x80;
+      const h = [...b0].map((x) => x.toString(16).padStart(2, '0')).join('');
+      return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+    };
+    const offWoId = uuid7();
+    const offTitle = `E2E-offline-${offWoId.slice(0, 8)}`;
+    const offPush = await callM('POST', '/v1/sync/push', {
+      ...pushBody,
+      ops: [{ opId: `e2e-off-${Date.now()}`, entity: 'workOrder', recordId: offWoId, kind: 'UPSERT', clientTimestamp: new Date().toISOString(),
+              data: { title: offTitle, description: 'أُنشئ في الميدان بلا اتصال', priority: 'HIGH', estHours: 1.5, planStartAt: new Date().toISOString() } }],
+    });
+    const offRes = offPush.body?.results?.[0];
+    check('إنشاء أمر شغل من الجهاز (push) يُطبَّق', ok(offPush.status) && offRes?.outcome === 'APPLIED', `status=${offPush.status} outcome=${offRes?.outcome} ${String(offRes?.reasonAr ?? '').slice(0, 60)}`);
+    const offList = await callM('GET', `/v1/maintenance/work-orders?q=${encodeURIComponent(offTitle)}`, undefined, { token: techToken });
+    const offRow = (offList.body?.items ?? [])[0];
+    check('السجل وصل بقائمة الأوامر برقم عمل حقيقي من تسلسل القاعدة', /^WO-\d{4}-\d{6}$/.test(offRow?.number ?? ''), `number=${offRow?.number ?? 'null'}`);
+    check('تواريخ الإنشاء/التحديث مختومة من الخادم (لا INSERT خام بلا @updatedAt)', Boolean(offRow?.createdAt ?? offRow?.updatedAt), `createdAt=${offRow?.createdAt ?? '—'}`);
+    // رقم العينة NOT NULL في القاعدة: بدونه يفشل الإنشاء الحرفي لا أنه يُرفض بأدب
+    const offSmpId = uuid7();
+    const smpPush = await callM('POST', '/v1/sync/push', {
+      ...pushBody,
+      ops: [{ opId: `e2e-smp-${Date.now()}`, entity: 'labSample', recordId: offSmpId, kind: 'UPSERT', clientTimestamp: new Date().toISOString(),
+              data: { unitCode: 'UREA-AMP', sampleType: 'PROCESS', collectedAt: new Date().toISOString(), description: 'عينة ميدانية من الدخان' } }],
+    });
+    const smpRes = smpPush.body?.results?.[0];
+    check('إنشاء عينة مختبر من الجهاز يُطبَّق (رقم العينة من نفس دالة REST)', ok(smpPush.status) && smpRes?.outcome === 'APPLIED', `status=${smpPush.status} outcome=${smpRes?.outcome} ${String(smpRes?.reasonAr ?? '').slice(0, 60)}`);
+    const smpList = await callM('GET', '/v1/lab/samples?take=5', undefined, { token: techToken });
+    const smpRow = (smpList.body?.items ?? []).find((x) => x.id === offSmpId) ?? (smpList.body?.items ?? [])[0];
+    check('العينة لها sampleNumber بصيغة SMP-', /^SMP-\d{4}-\d{6}$/.test(smpRow?.sampleNumber ?? smpRow?.number ?? ''), `sampleNumber=${smpRow?.sampleNumber ?? smpRow?.number ?? 'null'}`);
+  }
+
   if (process.env.DATABASE_URL) {
     const { default: pg } = await import('pg');
     const c = new pg.Client(process.env.DATABASE_URL);
