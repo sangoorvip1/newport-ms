@@ -1,6 +1,13 @@
-import { BadRequestException, Body, ConflictException, Controller, Get, Injectable, Module, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { Body, ConflictException, Controller, Get, Injectable, Module, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { shiftLogDto, type ShiftLogDto } from '@newport/domain';
+import {
+  paramTrendListQueryDto,
+  shiftLogDto,
+  shiftLogListQueryDto,
+  type ParamTrendListQueryDto,
+  type ShiftLogDto,
+  type ShiftLogListQueryDto,
+} from '@newport/domain';
 import { PrismaService } from '../common/prisma.service.js';
 import { ZodPipe } from '../common/zod.pipe.js';
 import { CurrentAccess, RequirePermission, type AccessContext } from '../security/access.guard.js';
@@ -124,7 +131,9 @@ export class ProductionService {
         FROM process_parameters p
         LEFT JOIN production_shift_logs l ON l.id = p."logId"
         LEFT JOIN production_units u ON u.id = l."unitId"
-       WHERE p."paramCode" = ${paramCode} AND p."at" >= now() - make_interval(days => ${days})
+       WHERE p."paramCode" = ${paramCode}
+         -- ${days} يصل int8 من برزما، وmake_interval تطلب int: بلا صريحة تصير النهاية كلها 500 (42883)
+         AND p."at" >= now() - make_interval(days => ${days}::int)
          AND (${unit ?? ''} = '' OR u.code = ${unit ?? ''})
        GROUP BY 1 ORDER BY 1`;
     return rows.map((r) => ({ day: r.bucket.toISOString().slice(0, 10), avg: r.avg, min: r.min, max: r.max, samples: r.n }));
@@ -153,15 +162,14 @@ export class ProductionController {
 
   @RequirePermission(['prod.log.view'])
   @Get('shift-logs')
-  list(@Query('unitCode') unitCode?: string, @Query('days') days?: string, @Query('shiftCode') shiftCode?: string, @CurrentAccess() access?: AccessContext) {
-    return this.prod.recentShiftLogs({ unitCode, shiftCode, days: days ? Number(days) : undefined }, access!);
+  list(@Query(new ZodPipe(shiftLogListQueryDto)) query: ShiftLogListQueryDto, @CurrentAccess() access?: AccessContext) {
+    return this.prod.recentShiftLogs(query, access!);
   }
 
   @RequirePermission(['prod.param.view'])
   @Get('params/trend')
-  trend(@Query('paramCode') paramCode: string, @Query('days') days?: string, @Query('unit') unit?: string) {
-    if (!paramCode) throw new BadRequestException({ statusCode: 400, messageAr: 'paramCode مطلوب' });
-    return this.prod.paramTrend(paramCode, days ? Number(days) : 30, unit);
+  trend(@Query(new ZodPipe(paramTrendListQueryDto)) query: ParamTrendListQueryDto) {
+    return this.prod.paramTrend(query.paramCode, query.days, query.unit);
   }
 }
 

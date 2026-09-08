@@ -12,6 +12,13 @@ import {
   type RawPunch,
 } from '@newport/domain';
 import { PrismaService } from '../common/prisma.service.js';
+import {
+  attendanceDailyQueryDto,
+  attendanceRecalcQueryDto,
+  payrollExportQueryDto,
+  type AttendanceDailyQueryDto,
+  type PayrollExportQueryDto,
+} from '@newport/domain';
 import { ZodPipe } from '../common/zod.pipe.js';
 import { CurrentAccess, RequirePermission, type AccessContext } from '../security/access.guard.js';
 
@@ -294,14 +301,17 @@ export class AttendanceController {
 
   @RequirePermission(['hr.att.correct', 'hr.att.import'], { anyOf: true })
   @Post('recalculate')
-  recalc(@Query('date') date: string, @Query('subDeptId') subDeptId: string | undefined, @CurrentAccess() access: AccessContext) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date ?? '')) throw new BadRequestException({ statusCode: 400, messageAr: 'date يجب أن تكون YYYY-MM-DD' });
-    return this.att.recalculateDay(date, { subDeptId }, access);
+  recalc(@Query(new ZodPipe(attendanceRecalcQueryDto)) query: AttendanceDailyQueryDto, @CurrentAccess() access: AccessContext) {
+    return this.att.recalculateDay(query.date, { subDeptId: query.subDeptId }, access);
   }
 
   @RequirePermission(['hr.att.view', 'hr.att.all'], { anyOf: true })
   @Get('daily')
-  async daily(@Query('date') date: string, @Query('subDeptId') subDeptId: string | undefined, @CurrentAccess() access: AccessContext) {
+  async daily(
+    @Query(new ZodPipe(attendanceDailyQueryDto)) query: AttendanceDailyQueryDto,
+    @CurrentAccess() access: AccessContext,
+  ) {
+    const { date, subDeptId } = query;
     const scoped = !access.profile.isFacilityWide;
     if (scoped && subDeptId && subDeptId !== access.profile.subDeptId && !access.can('hr.att.all' as never)) {
       throw new ForbiddenException({ statusCode: 403, messageAr: 'أنت مخوّل بعرض بصمة شعبتك فقط' });
@@ -342,9 +352,8 @@ export class AttendanceController {
 
   @RequirePermission(['hr.att.export_payroll'])
   @Get('payroll-export')
-  payrollExport(@Query('month') month: string, @Query('subDeptCode') subDeptCode?: string) {
-    if (!/^\d{4}-\d{2}$/.test(month ?? '')) throw new BadRequestException({ statusCode: 400, messageAr: 'month يجب أن يكون YYYY-MM' });
-    return this.att.payrollExport(month, subDeptCode);
+  payrollExport(@Query(new ZodPipe(payrollExportQueryDto)) query: PayrollExportQueryDto) {
+    return this.att.payrollExport(query.month, query.subDeptCode);
   }
 }
 

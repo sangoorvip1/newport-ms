@@ -2,7 +2,14 @@ import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { CurrentAccess, RequirePermission, type AccessContext } from '../security/access.guard.js';
 import { WorkOrderService } from './work-order.service.js';
 import { ZodPipe } from '../common/zod.pipe.js';
-import { workOrderCreateDto, workOrderTransitionDto, type WorkOrderCreateDto, type WorkOrderTransitionDto } from '@newport/domain';
+import {
+  workOrderCreateDto,
+  workOrderListQueryDto,
+  workOrderTransitionDto,
+  type WorkOrderCreateDto,
+  type WorkOrderListQueryDto,
+  type WorkOrderTransitionDto,
+} from '@newport/domain';
 
 @Controller('v1/maintenance/work-orders')
 export class WorkOrderController {
@@ -10,30 +17,8 @@ export class WorkOrderController {
 
   @RequirePermission(['maint.wo.view'])
   @Get()
-  list(
-    @Query('status') status?: string,
-    @Query('subDeptCode') subDeptCode?: string,
-    @Query('priority') priority?: string,
-    @Query('q') q?: string,
-    @Query('onlyMy') onlyMy?: string,
-    @Query('includeClosed') includeClosed?: string,
-    @Query('take') take?: string,
-    @Query('skip') skip?: string,
-    @CurrentAccess() access?: AccessContext,
-  ) {
-    return this.wo.list(
-      {
-        status: status as never,
-        subDeptCode,
-        priority,
-        q,
-        onlyMy: onlyMy === 'true',
-        includeClosed: includeClosed === 'true',
-        take: take ? Number(take) : undefined,
-        skip: skip ? Number(skip) : undefined,
-      },
-      access!,
-    );
+  list(@Query(new ZodPipe(workOrderListQueryDto)) query: WorkOrderListQueryDto, @CurrentAccess() access?: AccessContext) {
+    return this.wo.list(query, access!);
   }
 
   @RequirePermission(['maint.wo.view'])

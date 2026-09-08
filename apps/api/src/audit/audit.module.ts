@@ -1,4 +1,6 @@
-import { BadRequestException, Controller, Get, Injectable, Module, Query } from '@nestjs/common';
+import { Controller, Get, Injectable, Module, Query } from '@nestjs/common';
+import { auditListQueryDto, type AuditListQueryDto } from '@newport/domain';
+import { ZodPipe } from '../common/zod.pipe.js';
 import { PrismaService } from '../common/prisma.service.js';
 import { CurrentAccess, RequirePermission, type AccessContext } from '../security/access.guard.js';
 
@@ -57,20 +59,8 @@ export class AuditController {
 
   @RequirePermission(['audit.view'])
   @Get()
-  list(
-    @Query('entityType') entityType?: string,
-    @Query('entityId') entityId?: string,
-    @Query('actorId') actorId?: string,
-    @Query('action') action?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Query('take') take?: string,
-    @Query('skip') skip?: string,
-    @CurrentAccess() _access?: AccessContext,
-  ) {
-    void _access;
-    if (entityId && !/^[0-9a-f-]{36}$/i.test(entityId)) throw new BadRequestException('entityId must be a UUID');
-    return this.audit.query({ entityType, entityId, actorId, action, from, to, take: take ? Number(take) : undefined, skip: skip ? Number(skip) : undefined });
+  list(@Query(new ZodPipe(auditListQueryDto)) query: AuditListQueryDto) {
+    return this.audit.query(query);
   }
 
   @RequirePermission(['audit.view'])

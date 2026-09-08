@@ -11,9 +11,11 @@ import { randomBytes } from 'node:crypto';
  * ملاحظة: الاستثناءات المعروفة (HttpException بما فيها Forbidden/Unauthorized التي ترميها
  * طبقات الأمان برسائل عربية) تمر كما هي — يُضاف لها errorId فقط عند 5xx.
  *
- * أخطاء تحقق البيانات لا تظهر هنا أصلًا: كل مدخلات HTTP تُفحص بـ `ZodPipe` في المتحكمات
- * (400 + `issues[]` بحقول معيّنة)، فإضافة فرع ZodError في هذا الفلتر سيكون كودًا ميتًا
- * يتظاهر بعقد مختلف عمّا يراه العميل فعلًا.
+ * أخطاء تحقق البيانات لا تظهر هنا أصلًا: مدخلات HTTP تُفحص بـ `ZodPipe` في المتحكمات
+ * (400 + `issues[]` بحقول معيّنة) — بما فيها وسائط الاستعلام في قوائم القراءة. ما يبقى
+ * هو ما ترفضه القاعدة نفسها بعد الفحص (`P2023` / `22P02` في معرّف uuid): يُرد **400** لا 500،
+ * لأنه خطأ في مدخلات العميل لا عطل في الخادم، ورسالة «خطأ غير متوقع» تدفع المشغّل إلى
+ * إضاعة ساعة في سجلات سليمة. قياس 2026-09-08: five قائمة/مزامنة كانت 500 لهذا السبب وحده.
  */
 const DEFAULT_ARABIC: Record<number, string> = {
   400: 'الطلب غير مكتمل — راجع الحقول المعلَّمة في النموذج.',
@@ -48,6 +50,19 @@ export class ErrorContractFilter implements ExceptionFilter {
 
     const errorId = randomBytes(6).toString('hex');
     const detail = exception instanceof Error ? `${exception.name}: ${exception.message}` : String(exception);
+
+    // رفضتْها القاعدة لأنها صيغة غير مقبولة في عمود uuid: هذا خطأ إدخال، لا عطل خادم
+    const prismaCode = (exception as { code?: string } | null)?.code;
+    if (prismaCode === 'P2023' || /invalid input syntax|malformed|invalid text representation/i.test(detail)) {
+      this.logger.warn(`errorId=${errorId} ${req?.method} ${req?.url} → مدخل مرفوض من القاعدة: ${detail.slice(0, 220)}`);
+      res.status(400).json({
+        statusCode: 400,
+        errorId,
+        messageAr: 'قيمة أحد الحقول غير مقبولة لدى القاعدة — راجع المعرّفات والتواريخ ثم أعد المحاولة.',
+        hintAr: 'معرّف الخطأ يُستعمل للبحث في سجلات الخادم.',
+      });
+      return;
+    }
     this.logger.error(`errorId=${errorId} ${req?.method} ${req?.url} → ${detail.slice(0, 500)}`);
 
     res.status(status).json({

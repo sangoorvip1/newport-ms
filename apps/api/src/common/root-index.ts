@@ -42,6 +42,7 @@ export const ROOT_ENDPOINTS = [
   '/api/v1/sync/protocol',
   '/api/v1/documents',
   '/api/v1/lab/parameters',
+  '/api/v1/production/params/trend',
 ] as const;
 
 export function buildRootIndex(now: () => Date = () => new Date()) {

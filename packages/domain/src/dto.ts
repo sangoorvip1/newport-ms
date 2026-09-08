@@ -4,10 +4,39 @@
  */
 import { z } from 'zod';
 import { PERMIT_TYPES, PRIORITIES, WO_STATES } from './workorder.js';
+import { OOS_STATUSES, SAMPLE_STATUSES } from './lab.js';
 import { SHIFT_CODES } from './org.js';
 
 export const uuid = z.string().uuid();
 export const isoDateTime = z.string().datetime({ offset: true }).or(z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/));
+
+/* ── أدوات وسائط الاستعلام (query) في قوائم القراءة ────────────────────────────────
+   لماذا في الحِزمة المشتركة لا في كل متحكّم: هذه الوسائط تصل من شريط عنوان المتصفح أو من
+   العميل الميداني كنصوص، وأي قيمة غير مفحوصة تصل Prisma كما هي فتُرجع 500 خامًا بدل 400
+   تحمل اسم الحقل. قِيس 2026-09-08: status=NOPE و take=abc و skip=-5 و date=أمس و to=bad
+   كانت كلها 500، و documents?mine=true كان 400 لأن z.boolean() لا يرى نص 'true'.
+*/
+export const queryFlag = (def = false) =>
+  z.enum(['true', 'false']).default(def ? 'true' : 'false').transform((v) => v === 'true');
+
+/** `?take=` و `?skip=` نصوص دائمًا في الاستعلام: z.coerce يحوّلها ثم تُقيَّم */
+export const pageFields = {
+  take: z.coerce.number().int().min(1).max(200).optional(),
+  skip: z.coerce.number().int().min(0).max(100000).optional(),
+};
+
+export const isoDateField = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'التاريخ يجب أن يكون YYYY-MM-DD' })
+  // الشكل وحده لا يكفي: 2026-13-45 و2026-02-30 يطابقان النمط ويصنعان Invalid Date عند
+  // new Date()، فترجع القاعدة خطأً خامًا. المرور على Date ثم المقارنة يرجع التاريخ صحيحًا أو 400.
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00.000Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  }, { message: 'تاريخ غير موجود في التقويم الميلادي' });
+export const isoMonthField = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, { message: 'الشهر يجب أن يكون YYYY-MM بين 01 و12' });
 
 /* ── Auth ─────────────────────────────────────────────────────────────── */
 export const loginDto = z.object({
@@ -377,8 +406,92 @@ export const documentListQueryDto = z.object({
   entityType: z.enum(DOCUMENT_ENTITY_TYPES).optional(),
   entityId: uuid.optional(),
   docType: z.string().max(32).optional(),
-  mine: z.boolean().default(false),
-  take: z.number().int().min(1).max(100).default(25),
-  skip: z.number().int().min(0).default(0),
+  mine: queryFlag(),
+  take: z.coerce.number().int().min(1).max(100).default(25),
+  skip: z.coerce.number().int().min(0).max(50000).default(0),
 });
 export type DocumentListQueryDto = z.infer<typeof documentListQueryDto>;
+
+export const workOrderListQueryDto = z.object({
+  status: z.enum(WO_STATES).optional(),
+  priority: z.enum(PRIORITIES).optional(),
+  subDeptCode: z.string().max(24).optional(),
+  q: z.string().max(120).optional(),
+  from: isoDateField.optional(),
+  to: isoDateField.optional(),
+  onlyMy: queryFlag(),
+  includeClosed: queryFlag(),
+  ...pageFields,
+});
+export type WorkOrderListQueryDto = z.infer<typeof workOrderListQueryDto>;
+
+export const labSampleListQueryDto = z.object({
+  status: z.enum(SAMPLE_STATUSES).optional(),
+  subDeptCode: z.string().max(24).optional(),
+  unitCode: z.string().max(24).optional(),
+  q: z.string().max(120).optional(),
+  from: isoDateField.optional(),
+  to: isoDateField.optional(),
+  onlyMine: queryFlag(),
+  ...pageFields,
+});
+export type LabSampleListQueryDto = z.infer<typeof labSampleListQueryDto>;
+
+export const labOosListQueryDto = z.object({
+  status: z.enum(OOS_STATUSES).optional(),
+  severity: z.string().max(24).optional(),
+  ...pageFields,
+});
+export type LabOosListQueryDto = z.infer<typeof labOosListQueryDto>;
+
+export const labParameterListQueryDto = z.object({
+  unitCode: z.string().max(24).optional(),
+  q: z.string().max(120).optional(),
+});
+export type LabParameterListQueryDto = z.infer<typeof labParameterListQueryDto>;
+
+export const orgUserListQueryDto = z.object({
+  subDeptId: uuid.optional(),
+  departmentId: uuid.optional(),
+  q: z.string().max(120).optional(),
+  includeInactive: queryFlag(),
+});
+export type OrgUserListQueryDto = z.infer<typeof orgUserListQueryDto>;
+
+export const shiftLogListQueryDto = z.object({
+  unitCode: z.string().max(24).optional(),
+  shiftCode: z.enum(SHIFT_CODES).optional(),
+  days: z.coerce.number().int().min(1).max(366).optional(),
+});
+export type ShiftLogListQueryDto = z.infer<typeof shiftLogListQueryDto>;
+
+export const paramTrendListQueryDto = z.object({
+  paramCode: z.string().min(1).max(64),
+  days: z.coerce.number().int().min(1).max(366).default(30),
+  unit: z.string().max(16).optional(),
+});
+export type ParamTrendListQueryDto = z.infer<typeof paramTrendListQueryDto>;
+
+export const attendanceDailyQueryDto = z.object({
+  date: isoDateField,
+  subDeptId: uuid.optional(),
+});
+export type AttendanceDailyQueryDto = z.infer<typeof attendanceDailyQueryDto>;
+
+export const attendanceRecalcQueryDto = attendanceDailyQueryDto;
+export const payrollExportQueryDto = z.object({
+  month: isoMonthField,
+  subDeptCode: z.string().max(24).optional(),
+});
+export type PayrollExportQueryDto = z.infer<typeof payrollExportQueryDto>;
+
+export const auditListQueryDto = z.object({
+  entityType: z.string().max(64).optional(),
+  entityId: uuid.optional(),
+  actorId: uuid.optional(),
+  action: z.string().max(64).optional(),
+  from: isoDateTime.optional(),
+  to: isoDateTime.optional(),
+  ...pageFields,
+});
+export type AuditListQueryDto = z.infer<typeof auditListQueryDto>;

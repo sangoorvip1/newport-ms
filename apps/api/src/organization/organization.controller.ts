@@ -1,4 +1,6 @@
+import { orgUserListQueryDto, type OrgUserListQueryDto } from '@newport/domain';
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { ZodPipe } from '../common/zod.pipe.js';
 import { RequirePermission } from '../security/access.guard.js';
 import { OrganizationService } from './organization.service.js';
 import { CONFIG } from '../config.js';
@@ -28,13 +30,8 @@ export class OrganizationController {
 
   @RequirePermission(['org.user.view'])
   @Get('users')
-  users(
-    @Query('subDeptId') subDeptId?: string,
-    @Query('departmentId') departmentId?: string,
-    @Query('q') q?: string,
-    @Query('includeInactive') includeInactive?: string,
-  ) {
-    return this.org.listUsers({ subDeptId, departmentId, q, includeInactive: includeInactive === 'true' });
+  users(@Query(new ZodPipe(orgUserListQueryDto)) query: OrgUserListQueryDto) {
+    return this.org.listUsers(query);
   }
 
   @RequirePermission(['org.role.manage'])

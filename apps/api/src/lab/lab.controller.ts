@@ -10,6 +10,14 @@ import {
   type LabVerifyDto,
 } from '@newport/domain';
 import { CurrentAccess, RequirePermission, type AccessContext } from '../security/access.guard.js';
+import {
+  labOosListQueryDto,
+  labParameterListQueryDto,
+  labSampleListQueryDto,
+  type LabOosListQueryDto,
+  type LabParameterListQueryDto,
+  type LabSampleListQueryDto,
+} from '@newport/domain';
 import { ZodPipe } from '../common/zod.pipe.js';
 import { LabService } from './lab.service.js';
 
@@ -27,8 +35,8 @@ export class LabController {
 
   @RequirePermission(['lab.result.view'])
   @Get('parameters')
-  parameters(@Query('unitCode') unitCode?: string, @Query('q') q?: string, @CurrentAccess() access?: AccessContext) {
-    return this.lab.parameters({ unitCode, q }, access!);
+  parameters(@Query(new ZodPipe(labParameterListQueryDto)) query: LabParameterListQueryDto, @CurrentAccess() access?: AccessContext) {
+    return this.lab.parameters(query, access!);
   }
 
   @RequirePermission(['lab.result.view'])
@@ -41,32 +49,8 @@ export class LabController {
 
   @RequirePermission(['lab.sample.view'])
   @Get('samples')
-  listSamples(
-    @Query('status') status?: string,
-    @Query('subDeptCode') subDeptCode?: string,
-    @Query('unitCode') unitCode?: string,
-    @Query('q') q?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-    @Query('onlyMine') onlyMine?: string,
-    @Query('take') take?: string,
-    @Query('skip') skip?: string,
-    @CurrentAccess() access?: AccessContext,
-  ) {
-    return this.lab.listSamples(
-      {
-        status,
-        subDeptCode,
-        unitCode,
-        q,
-        from,
-        to,
-        onlyMine: onlyMine === 'true',
-        take: take ? Number(take) : undefined,
-        skip: skip ? Number(skip) : undefined,
-      },
-      access!,
-    );
+  listSamples(@Query(new ZodPipe(labSampleListQueryDto)) query: LabSampleListQueryDto, @CurrentAccess() access?: AccessContext) {
+    return this.lab.listSamples(query, access!);
   }
 
   @RequirePermission(['lab.sample.view'])
@@ -99,14 +83,8 @@ export class LabController {
 
   @RequirePermission(['lab.oos.view'])
   @Get('oos')
-  listOos(
-    @Query('status') status?: string,
-    @Query('severity') severity?: string,
-    @Query('take') take?: string,
-    @Query('skip') skip?: string,
-    @CurrentAccess() access?: AccessContext,
-  ) {
-    return this.lab.listOos({ status, severity, take: take ? Number(take) : undefined, skip: skip ? Number(skip) : undefined }, access!);
+  listOos(@Query(new ZodPipe(labOosListQueryDto)) query: LabOosListQueryDto, @CurrentAccess() access?: AccessContext) {
+    return this.lab.listOos(query, access!);
   }
 
   @RequirePermission(['lab.oos.manage'])
