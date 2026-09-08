@@ -5,7 +5,7 @@
  * role_subdept_grants ويتحقق منه AccessGuard. ولو كُتبت يدويًا لانفصلت عن الواقع.
  * كما يتحقق المولّد أن كل رمز صلاحية مذكور في النص موجود فعلًا في الكتالوج (لا رموح مخترعة).
  *
- * التشغيل: npm run docs:features   (أو npm run docs:all -w @newport/api)
+ * التشغيل: npm run docs:features -w @newport/domain   (أو npm run docs:all -w @newport/api)
  */
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -439,7 +439,7 @@ const readOnly = [...READ_ONLY_ROLES].map((r) => `\`${r}\``).join('، ');
 
 let md = `# 03 — ميزات وصلاحيات الأقسام والشعب
 
-> **ملف مولَّد** بـ \`npm run docs:features\` من \`packages/domain\`. جداول الأدوار مشتقة من
+> **ملف مولَّد** بـ \`npm run docs:features -w @newport/domain\`. جداول الأدوار مشتقة من
 > \`resolveGrants()\` — نفس الحساب الذي يزرع \`role_subdept_grants\` ويتحقق منه \`AccessGuard\`
 > ونقطة \`GET /v1/org/permissions-verify\`. النثر (الميزات/القواعد/المؤشرات) في
 > \`packages/domain/scripts/gen-features-doc.ts\`.
@@ -548,7 +548,7 @@ ${globalRoleTable()}
 - **دوران التغيير الآمن:** تعديل \`roles.ts\` ← \`npm test -w @newport/domain\` ← \`npm run docs:all -w @newport/api\`
   ← \`npm run seed -w @newport/api\` ← \`GET /v1/org/permissions-verify\` يجب أن يعيد \`inSync:true\`.
 - **الهيكل التنظيمي مرجعي:** لا تُضاف شعب جديدة من الواجهة؛ أي توسعة (خط ثانٍ/ثالث) تتم عبر
-  \`facilities\` و\`sub_departments\` مع \`npm run docs:all\` لفحص الانحراف.
+  \`facilities\` و\`sub_departments\` مع \`npm run docs:all -w @newport/api\` لفحص الانحراف.
 
 ---
 

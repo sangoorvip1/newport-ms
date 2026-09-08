@@ -161,7 +161,7 @@ SELF     : { createdById / byUserId / userId }  // صفّه هو فقط
 
 ## 5. طبقة البيانات (Prisma ↔ PostgreSQL)
 
-- **85 نموذجًا · 25 enum · 93 مفتاحًا أجنبيًا · 87 جدولًا أساسيًا · 97 فهرسًا إضافيًا** (قياس على القاعدة الحيّة؛ الكتالوج المولّد: `docs/generated/schema.catalog.md`) (يُعيد توليدها `npm run docs:schema` في `docs/generated/schema.catalog.md`).
+- **85 نموذجًا · 25 enum · 93 مفتاحًا أجنبيًا · 87 جدولًا أساسيًا · 97 فهرسًا إضافيًا** (قياس على القاعدة الحيّة؛ الكتالوج المولّد: `docs/generated/schema.catalog.md`) (يُعيد توليدها `npm run docs:schema -w @newport/api` في `docs/generated/schema.catalog.md`).
 - **قاعدة التسمية:** Prisma `@@map` يغيّر اسم الجدول إلى snake_case، **أما الأعمدة فتبقى camelCase**؛
   لذا كل SQL خام يسمّي عمودًا يجب أن يقبّسه: `"subDeptId"`, `"createdAt"`, `"isOfflineCreated"`.
   هذه القاعدة موثقة في رأس `schema.prisma` ومفحوصة بـ `test/schema-contract.spec.ts`.
@@ -320,6 +320,7 @@ src/ui/kit.tsx       RTL، أزرار كبيرة، قوائم اختيار بد�
 | `apps/api/test/schema-contract.spec.ts` | 5 | كل اسم جدول/عمود مستعمل في `SYNC_META`/`ENTITY_MAP` موجود في `schema.prisma`؛ لا snake_case ولا `#` في SQL الترحيل |
 | `apps/api/test/sync-triggers.spec.ts` | 5 | **على قاعدة حيّة**: registry=19، `trg_sync` مرة لكل جدول، `trg_bump_version` لا يمس `users`، `fn_align_number_sequences()`، لا سطر `#` |
 | `apps/api/test/serialization.spec.ts` | 3 | BigInt → JSON (صغير رقم، كبير نص، تثبيت مزدوج آمن) |
+| `apps/api/test/doc-commands.spec.ts` | 3 | كل `npm run …` في الوثائق موجود فعلًا في `package.json` المستهدف — يمنع أوامر منقولة من الذاكرة |
 | `apps/api/test/scripts-parse.spec.ts` | 4 | كل `scripts/*.mjs` تُحلَّل كـJS صالح — نص تعطّل على نسخة جديدة كان يسقط بصمت (تصادم اسم مع `import` وسطر بقايا diff)
 | `apps/api/test/root-index.spec.ts` | 5 | بطاقة الجذر: شكلها، تهريب الوسوم القادمة من البيئة، مفاصلة HTML/JSON، وأنها لا تبتلع أي مسار آخر |
 | `apps/api/test/document-store.spec.ts` | 8 | التوكن الموقّع (HMAC/انتهاء/حمولة معدّلة)، رفض أنواع خطرة (SVG/EXE)، حراسة `../` في المسار، و`wx` ضد استبدال بايتات مسجّلة |
@@ -328,7 +329,7 @@ src/ui/kit.tsx       RTL، أزرار كبيرة، قوائم اختيار بد�
 | `scripts/e2e-smoke.mjs` | 37 | HTTP حيّ: جاهزية، جلسة، قيد تغيير كلمة المرور، تدوير refresh + كشف إعادة الاستعمال، تطابق الهيكل/الصلاحيات، دورة أمر شغل، رفض انتقال 409، مزامنة push/pull/idempotency/الحماية، سجل تدقيق، ختم `syncSeq` |
 
 ```bash
-npm run test:all && npm run typecheck:all            # 150 فحصًا + typecheck نظيف (4 حِزَم)
+npm run test:all && npm run typecheck:all            # 153 فحصًا + typecheck نظيف (4 حِزَم)
 API_URL=… npm run e2e -w @newport/api                # 74/74
 npm run docs:all -w @newport/api                     # مصفوفة + 03 + DDL + كتالوج (وتفحص أن كل رمز مذكور حقيقي)
 ```

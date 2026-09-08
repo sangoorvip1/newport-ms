@@ -74,7 +74,7 @@ npm run build -w @newport/api && npm run start -w @newport/api     # http://127.
 فوق كل ما يلي مُنفَّذ في هذه البيئة، لا على الورق:
 
 ```bash
-npm run test:all          # domain 82 · api 60 (منها 4 على قاعدة حيّة) · mobile 8  = 150 فحصًا
+npm run test:all          # domain 82 · api 63 (منها 4 على قاعدة حيّة) · mobile 8  = 153 فحصًا
 npm run typecheck:all     # domain · api · desktop (renderer+electron) · mobile — بلا أخطاء
 npm run docs:all -w @newport/api   # مصفوفة الوصول + docs/03 + DDL + كتالوج المخطط (كلها مشتقة من الكود)
 npm run e2e -w @newport/api   # 74/74 فحص HTTP حيّ (منها 5 لبطاقة تعريف الخدمة على /)
@@ -112,7 +112,8 @@ npm run e2e -w @newport/api   # 74/74 فحص HTTP حيّ (منها 5 لبطاق�
 | `docs/05-architecture.md` | البنية البرمجية والوحدات وأنماط التنفيذ والاختبار — جاهزة للبدء المباشر |
 
 ▶ **للتشغيل الفوري**: `RUN.md` — أربع طرق (تطوير على جهاز واحد · Electron · هاتف ·
-  نشر المعمل)، وكل أمر فيها مأخوذ من `package.json` الحالي لا من وصف عام.
+  نشر المعمل) + قسم **PowerShell** و`scripts\dev.ps1` لأمر واحد على Windows.
+  كل أمر فيها مأخوذ من `package.json` الحالي (فحص آلي: `test/doc-commands.spec.ts`) لا من وصف عام.
 | `docs/generated/` | مولَّد من المخطط: `schema.postgres.sql`، `schema.catalog.md` (85 نموذجًا/25 enum)، مصفوفة الصلاحيات |
 
 > `docs/generated/` يُعاد توليده بعد أي تعديل على `schema.prisma` أو `packages/domain`:

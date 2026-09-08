@@ -312,7 +312,7 @@ npm run test:all && npm run typecheck:all                        # 88 فحصًا
   حديثًا): يبني عنقود القاعدة في `apps/api/.pgdata` على المنفذ **54329** وينشئ المستخدم/القاعدة `newport`، ويطري
   روابط SONAME لـ ICU المرفقة مع الحزمة (بدونها يفشل `initdb` على الصور التي تحمل ICU 76 فقط).
   مخرجاته تختتم بسطر `READY DATABASE_URL=…` — انسخه كما هو لبقية الأوامر.
-- بعد أي تعديل على `schema.prisma` أو `packages/domain`: `npm run docs:all -w @newport/api` ثم `npm run seed`.
+- بعد أي تعديل على `schema.prisma` أو `packages/domain`: `npm run docs:all -w @newport/api` ثم `npm run seed -w @newport/api`.
 
 ---
 

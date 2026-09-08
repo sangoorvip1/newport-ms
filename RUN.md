@@ -22,6 +22,57 @@
 
 ## 1) وضع التطوير: النظام كاملًا على جهاز واحد
 
+### 1.0) Windows PowerShell — اقرأ هذا أولًا إن كنت على Windows
+
+الفروقات عن Bash التي تُفسد النسخ واللصق (كل سطر في الجدول من رسالة خطأ حقيقية) :
+
+| ما تكتبه في Bash | ما يحدث في PowerShell 5.1 | البديل |
+|---|---|---|
+| `cmd1 && cmd2` | `The token '&&' is not a valid statement separator` | سطر لكل أمر، أو `cmd1; cmd2` |
+| `export VAR=v` / `VAR=v cmd` | `The term 'export' is not recognized` | `$env:VAR = "v"` ثم الأمر في سطر تالٍ |
+| `npm run build -w @newport/domain` | `@` لها معنى في PowerShell (splatting) | `-w '@newport/domain'` بين علامات اقتباس |
+| الأوامر من `C:\WINDOWS\System32` | `No workspaces found` و`Cannot find module …\apps\api\…` | `cd` إلى جذر المستودع أولًا |
+
+**الطريق المختصر (نص واحد يفعّل كل شيء):**
+
+```powershell
+cd C:\src\newport-ms
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass   # إن كان تشغيل النصوص مقيدًا
+.\scripts\dev.ps1                                            # install + build + قاعدة + migrate + seed
+.\scripts\dev.ps1 -RunApi                                    # … ثم يشغّل الـAPI في هذه الطرفية
+```
+
+`scripts/dev.ps1` متوافق مع PowerShell 5.1 و7 (بلا `&&`، بلا `? :`، بلا `??`)، ورسائله ASCII عمدًا
+لأن 5.1 يقرأ الملفات بلا BOM بترميز النظام فيفسد النص العربي داخل السكربت؛ الشرح العربي هنا.
+
+**أو سطرًا سطرًا** (بعد `cd` إلى جذر المستودع):
+
+```powershell
+npm install
+npm run build -w '@newport/domain'
+node apps\api\scripts\dev-db.mjs        # طرفية ثانية تبقى مفتوحة (أو: .\scripts\dev.ps1 يديرها)
+$env:DATABASE_URL = "postgresql://newport:newport@127.0.0.1:54329/newport?schema=public"
+npm run prisma:generate -w '@newport/api'
+cd apps\api; npx prisma migrate deploy; cd ..\..
+$env:SEED_DEMO = "true"; npm run seed -w '@newport/api'
+$env:SITE_TZ = "Asia/Baghdad"; $env:STORAGE_DRIVER = "local"; $env:STORAGE_LOCAL_DIR = "storage/documents"
+npm run start:dev -w '@newport/api'
+npm run dev -w '@newport/desktop'          # طرفية ثالثة — الواجهة على http://localhost:5173
+```
+
+حالتان مقاستان تستحقان المعرفة:
+
+- **القاعدة المضمّنة على Windows**: `embedded-postgres@18.4.0-beta.17` تحمل `@embedded-postgres/windows-x64`
+  في `optionalDependencies` (تحققت من سجل npm؛ HTTP 200) — فتعمل `dev-db.mjs` على Windows. ترميم روابط
+  `libicu` في النص خاص بـLinux ويُتخطى بأمان هناك. إن أردت Postgres رسميًا بدلها: مرّر `-LocalDb`
+  بعد ضبط `$env:DATABASE_URL` على قاعدتك.
+- **أولوية `DATABASE_URL`**: Prisma CLI يقرأ `apps/api/.env` ويطبع `Environment variables loaded from .env`،
+  لكن قيمة الطرفية تتغلب عليها (قيس: استخدم `127.0.0.1:54329` مع `.env` مكتوب فيه `localhost:5432`).
+
+> ما قِيس هنا: `scripts/dev.ps1` نُفِّذ من أول تشغيل داخل حاوية اختبار بـ PowerShell 7 — تفتيش الأدوات،
+> تشغيل القاعدة المضمّنة، `migrate deploy`، البذر (`3/13/21/94/36/404/23`)، و`exit=0`.
+> لم يُشغَّل على Windows حقيقي من هنا، لذا يبقى ثنائي `postgres` لـ Windows غير مختبَر عمليًا.
+
 ### 1.1 التثبيت (مرة واحدة)
 
 ```bash
@@ -51,9 +102,9 @@ node apps/api/scripts/dev-db.mjs      # تبقى هذه الطرفية مفتو�
 
 ```bash
 export DATABASE_URL="postgresql://newport:newport@127.0.0.1:54329/newport?schema=public"
-npm run db:generate -w @newport/api                                   # prisma generate
+npm run prisma:generate -w @newport/api                               # prisma generate
 (cd apps/api && npx prisma migrate deploy)                            # 87 جدولًا، 45 trigger، RLS
-SEED_DEMO=true npm run db:seed -w @newport/api
+SEED_DEMO=true npm run seed -w @newport/api
 ```
 
 البذر يطبع العدّادات التي يجب أن تراها (أي رقم آخر = مخطط مختلف):
@@ -166,9 +217,12 @@ Postgres: 16+، pg_dump يوميًا + نسخة من مجلد الوثائق (ا
 ## 6) بوابة الفحص السريعة (شغّلها قبل أي تسليم)
 
 ```bash
-npm run test:all        # 150 فحصًا (domain 82 · api 60 · mobile 8)
+npm run test:all        # 153 فحصًا (domain 82 · api 63 · mobile 8)
 npm run typecheck:all   # 4 حِزَم، 0 أخطاء
 npm run e2e -w @newport/api       # يتطلب API + قاعدة حيّين: API_URL=http://127.0.0.1:3000/api
+
+> شغّل الدخان على منفذ الـAPI مباشرة، لا على `http://localhost:5173/api` (بروكسي vite): البروكسي يمرّر
+> `/api` فقط، فيعيد `index.html` لبقية المسارات — وتُقرأ فحوص بطاقة الجذر الأربعة كفشل كاذب (قيس).
 npm run docs:all -w @newport/api  # يولّد docs/03 وschema — «بدون انحراف» شرط قبول
 ```
 

@@ -206,14 +206,14 @@ production_shift_logs_unitId_shiftDate_shiftCode_key ON public.production_shift_
 
 ```bash
 export DATABASE_URL="postgresql://newport:***@localhost:5432/newport?schema=public"
-npm run db:generate -w @newport/api                 # أنواع Prisma
+npm run prisma:generate -w @newport/api                 # أنواع Prisma
 cd apps/api && npx prisma migrate deploy            # 1) DDL Prisma  2) ترحيل الامتدادات وRLS وviews
 npm run seed -w @newport/api                         # idempotent: الهيكل + 94 صلاحية + 21 دورًا + 36 منحًا (شعبة×دور) + 404 ربط + 23 مستخدمًا
 # أو بالكامل عبر Docker:  docker compose -f deploy/docker-compose.yml up -d
 ```
 لإعادة توليد ملفات التوثيق بعد أي تعديل على المخطط:
 ```bash
-npm run db:ddl -w @newport/api                 # docs/generated/schema.postgres.sql
+npm run ddl -w @newport/api                 # docs/generated/schema.postgres.sql
 npm run docs:schema -w @newport/api            # docs/generated/schema.catalog.md
 npm run matrix -w @newport/domain              # docs/generated/permissions.matrix.{json,md}
 ```
